@@ -30,6 +30,7 @@ GitHub를 화면·판정 코드 수정 없이 붙일 수 있는 형태다.
 | File | Change | What |
 |---|---|---|
 | `app/package.json`, `app/index.html`, `app/vite.config.ts`, `app/tsconfig*.json` | new | create-tauri-app (React + TypeScript) 기본 파일 |
+| create-tauri-app가 만드는 그 밖의 파일 (`src-tauri/build.rs`, `src-tauri/icons/`, `src/*.css`, `public/` 등) | new | 템플릿 그대로. 쓰지 않는 예제 코드는 지워도 된다 |
 | `app/.gitignore` | new | `node_modules/`, `dist/`, `src-tauri/target/` |
 | `app/src/main.tsx` | new | 앱 진입점 |
 | `app/src/App.tsx` | new | 메인 화면 레이아웃 |
