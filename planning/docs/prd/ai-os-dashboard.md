@@ -1,6 +1,6 @@
 # AI OS Dashboard
 
-- Status: Draft
+- Status: Approved (chaejinseong, 2026-10-06)
 - Created: 2026-10-06
 - Owner: chaejinseong
 - One-pager (if any): planning/docs/prd/ai-os-dashboard-one-pager.md
@@ -148,6 +148,8 @@
 
 Filled in once this PRD is `Approved` and work moves to the app.
 
-- Spec(s): app/docs/specs/<file>.md
-- Status of each: (mirror `app/docs/specs/00-index.md`)
-- Anything the spec intentionally left out of this PRD, and why:
+- Spec(s): app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md (M1)
+- Status of each: Draft
+- Anything the spec intentionally left out of this PRD, and why: M2~M4
+  (Calendar·Notion·GitHub 커넥터, Claude API 판정, 피드백, 비용 기록)는
+  별도 spec으로 나눈다. M1은 구조를 검증하는 최소 단위다.

@@ -9,6 +9,7 @@ Status flow: `Draft` → `Approved` (human only) → `Implemented`
 | File | Status | Implementer | Source PRD | Summary |
 |---|---|---|---|---|
 | _(example) 260219-1956-01-login-token-refresh.md_ | Approved | codex | planning/docs/prd/login.md | Refresh expired token once before logging out |
+| 261006-1535-01-m1-app-skeleton-gmail.md | Draft | codex | planning/docs/prd/ai-os-dashboard.md | M1: Tauri 골격, Connector trait, Gmail 읽기, 캐시·동기화, 미응답 메일 판정 |
 
 ## How to add a spec
 

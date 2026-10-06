@@ -7,6 +7,7 @@ deleted, or archived.
 | File | Status | Summary |
 |---|---|---|
 | _(example) 260219-1956-01-signup-access-control.md_ | open | Finish access control rules for signup flow |
+| 261006-1535-01-google-cloud-setup.md | open | Gmail OAuth 클라이언트 만들기 (사람이 직접) |
 
 ## How to add an item
 

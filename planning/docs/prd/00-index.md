@@ -8,7 +8,7 @@ shelved, just update its status so the history stays visible.
 |---|---|---|---|
 | _(example) signup-onboarding-v2.md_ | Approved | app/docs/specs/260219-1956-01-onboarding-v2.md | Redesign onboarding to cut drop-off |
 | ai-os-dashboard-one-pager.md | Approved | — | 메일·일정·프로젝트를 모아 놓친 업무를 알려주는 macOS 앱 (원페이저) |
-| ai-os-dashboard.md | Draft | — | v1 PRD: Gmail·Calendar·Notion·GitHub, Claude API 판정, Tauri |
+| ai-os-dashboard.md | Approved | app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md | v1 PRD: Gmail·Calendar·Notion·GitHub, Claude API 판정, Tauri |
 
 ## How to add an initiative
 
