@@ -7,6 +7,7 @@ shelved, just update its status so the history stays visible.
 | File | Status | Spec(s) | Summary |
 |---|---|---|---|
 | _(example) signup-onboarding-v2.md_ | Approved | app/docs/specs/260219-1956-01-onboarding-v2.md | Redesign onboarding to cut drop-off |
+| ai-os-dashboard-one-pager.md | Approved | — | 메일·일정·프로젝트를 모아 놓친 업무를 알려주는 macOS 앱 (원페이저) |
 
 ## How to add an initiative
 
