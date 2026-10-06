@@ -1,28 +1,55 @@
 # <short-title>
 
 - Date: YYYY-MM-DD
-- Author: <name, or "agent">
-- Related todo (if any): docs/todo/<file>.md
+- Agent: codex | claude | <name>
+- Spec: app/docs/specs/<file>.md (or "none — trivial fix")
+- Commits: <hash>, <hash>
 
-## What changed
+## Summary
 
-- ...
-- ...
+One or two sentences: what was done and why.
 
-## Why
+## Changes by file
 
-- ...
+### `src/<path>`
+- Where: <function / component / section name>
+- Purpose: <why this file had to change>
+- Method: <approach taken; rejected alternative if it matters>
+
+### `tests/<path>`
+- Where: ...
+- Purpose: ...
+- Method: ...
+
+Formatting / imports / generated only: `<file>`, `<file>`
 
 ## Verified
 
-How this was confirmed working (test output, build result, etc.) — not
-just "it should work."
+Commands from the spec's "Done when", with actual results
+(e.g. `npm test` → 42 passed, 0 failed). If something couldn't be
+verified, say so.
+
+## Review
+
+- Reviewer: claude | codex | <name>
+- Round 1:
+  - [must-fix] ... → resolved in <hash>
+  - [suggestion] ... → accepted / declined (why)
+- Result: approved | changes requested
 
 ## Follow-ups
 
-- (link to a `docs/todo/` item, or "none")
+- (link to a `app/docs/todo/` item, or "none")
 
 ---
 File naming: `YYMMDD-HHMM-NN-short-title.md` — e.g.
-`260219-1956-01-club-detail-responsive.md`. Always include the timestamp,
-even solo, so reports sort chronologically and stay unique.
+`260219-1956-01-login-token-refresh.md`. Always include the timestamp so
+reports sort chronologically and stay unique.
+
+Example of one file entry:
+
+### `src/auth/login.ts`
+- Where: `validateToken()`, `LoginForm` submit handler
+- Purpose: an expired token caused an infinite redirect on login
+- Method: on expiry, try one refresh, log out if it fails. Rejected
+  handling it in the global interceptor — it would affect every API call.

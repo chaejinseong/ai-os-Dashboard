@@ -4,9 +4,9 @@ One line per initiative. Full detail lives in each file. Update the status
 column as things move — don't delete a row when something ships or gets
 shelved, just update its status so the history stays visible.
 
-| File | Status | Summary |
-|---|---|---|
-| _(example) signup-onboarding-v2.md_ | In Review | Redesign onboarding to cut drop-off |
+| File | Status | Spec(s) | Summary |
+|---|---|---|---|
+| _(example) signup-onboarding-v2.md_ | Approved | app/docs/specs/260219-1956-01-onboarding-v2.md | Redesign onboarding to cut drop-off |
 
 ## How to add an initiative
 
@@ -15,3 +15,5 @@ shelved, just update its status so the history stays visible.
 2. Once approved, copy `_template.md` to `<kebab-case-name>.md` in this
    folder and expand it.
 3. Add a row above; keep it updated as status changes.
+4. Once approved, a spec gets drafted in `app/docs/specs/` — put its path
+   in the "Spec(s)" column and the PRD's `## Handoff` section.

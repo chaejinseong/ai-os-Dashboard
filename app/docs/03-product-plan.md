@@ -3,6 +3,10 @@
 > Fill in per project. This is the "why" and "what" — purpose and scope,
 > not implementation detail (that belongs in `02-specs.md`).
 
+## Source PRDs
+
+- (paths under `planning/docs/prd/` — summarize here, don't copy them)
+
 ## Purpose
 
 What is this project for? Who is it for?

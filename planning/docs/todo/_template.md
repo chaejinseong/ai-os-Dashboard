@@ -2,8 +2,8 @@
 
 - Status: open | resolved
 - Created: YYYY-MM-DD
-- Owner: <name, or "unassigned">
-- Related initiative (if any): docs/prd/<file>.md
+- Owner: claude | codex | <name> | unassigned
+- Related initiative (if any): planning/docs/prd/<file>.md
 
 ## Context
 

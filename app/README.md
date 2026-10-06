@@ -1,4 +1,8 @@
-# docs-template
+# app/
+
+> Part of a product workspace — see the root `README.md` for how
+> `planning/` hands off to this folder and how Claude and Codex split the
+> work.
 
 A reusable `docs/` architecture + `AGENTS.md` working agreement for
 AI-assisted projects (works solo or with a team, and across tools —
@@ -13,12 +17,15 @@ AGENTS.md                        entry point — boundaries, verification, workf
 docs/
   01-folder-architecture.md      where things live and why
   02-specs.md                    stack, exact commands, code style, constraints
-  03-product-plan.md             purpose, scope, requirements
+  03-product-plan.md             purpose, scope, requirements (links source PRDs)
+  specs/
+    00-index.md                  index of implementation specs + status
+    _template.md                 format for a spec (the Claude → Codex handoff)
   todo/
     00-todo-list.md              index of open/deferred work
     _template.md                 format for a new todo item
   reports/
-    _template.md                 format for a completed-work report
+    _template.md                 work log: per-file where / purpose / method + review
 ```
 
 - `01`–`03` are the fixed reference docs for a project: fill them in once,
@@ -29,29 +36,14 @@ docs/
   it earns its place. If a rule only matters sometimes, it belongs in
   `docs/02-specs.md` or a project-specific note, not `AGENTS.md`.
 
-## How to use it in a new project
-
-Option A — copy in manually:
-
-```bash
-git clone https://github.com/<you>/docs-template.git /tmp/docs-template
-cp -r /tmp/docs-template/AGENTS.md /tmp/docs-template/docs ./
-```
-
-Option B — mark this repo as a GitHub "template repository" (Settings →
-Template repository), then click "Use this template" when starting a new
-project repo on GitHub, and delete anything you don't need.
-
-Then:
+## How to use it
 
 1. Fill in `docs/03-product-plan.md`, `docs/02-specs.md` (especially the
    `## Commands` section — an agent can't guess these), and
-   `docs/01-folder-architecture.md` for the new project.
-2. Point your AI tool at `AGENTS.md` as its entry point, or just tell it
-   "read AGENTS.md first." Most current tools (Claude Code, Cursor,
-   Copilot, Codex, Windsurf, ...) pick this filename up automatically.
-3. As work happens, add todo items and reports using the `_template.md`
-   files — don't freehand a different format, it breaks the index.
+   `docs/01-folder-architecture.md`.
+2. Put your source code in this folder (`src/`, `tests/`, ...).
+3. Work flows through `docs/specs/` → code → `docs/reports/` — see
+   `AGENTS.md`.
 
 ## Defaults baked into this template
 
@@ -69,11 +61,12 @@ than editing `AGENTS.md` itself, so the base template stays reusable.
 - **File naming**: `YYMMDD-HHMM-NN-short-title.md` for both `todo/` and
   `reports/` entries — always timestamped, even solo, so both folders sort
   chronologically and stay unambiguous if you ever run parallel agents.
-- **Plan before code**: for anything beyond a one-line trivial fix, the
-  agent posts a short plan and waits for approval before implementing —
-  same rule whether you're driving it from a CLI or a desktop app. For
-  large or ambiguous work, that plan becomes a throwaway `SPEC.md` instead
-  of just a chat message. See `AGENTS.md`'s "Before you implement" section.
+- **Plan before code**: anything beyond a trivial fix needs a spec in
+  `docs/specs/` that the human marks `Approved`. An approved spec is the
+  go-ahead — the implementer doesn't ask again. Specs are kept, not
+  deleted, so reviews can check the code against them.
+- **Work log**: every report records, per changed file, where it changed
+  (by symbol name), why, and how — the things git can't record.
 
 ## Monorepos
 

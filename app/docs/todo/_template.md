@@ -2,7 +2,8 @@
 
 - Status: open | in-progress | blocked | done
 - Created: YYYY-MM-DD
-- Owner: <name, or "unassigned">
+- Owner: claude | codex | <name> | unassigned
+- Related spec (if any): app/docs/specs/<file>.md
 
 ## Context
 

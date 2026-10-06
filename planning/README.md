@@ -1,4 +1,7 @@
-# planning-docs-template
+# planning/
+
+> Part of a product workspace — see the root `README.md` for how this
+> folder hands off to `app/`.
 
 The planning-side sibling of `docs-template` (the dev version): a reusable
 `docs/` architecture + `AGENTS.md` working agreement for AI-assisted
@@ -16,7 +19,7 @@ docs/
   prd/
     00-index.md                   index of all initiatives + status
     _one-pager-template.md        cheap early-validation doc (PR/FAQ-style)
-    _template.md                  full PRD (10-section format)
+    _template.md                  full PRD (10 sections + Handoff to app/docs/specs/)
   todo/
     00-todo-list.md               index of open questions
     _template.md                  format for a new open question
@@ -57,26 +60,17 @@ content, because "done" means something different:
 |---|---|---|
 | "Plan before you build" | Plan → approval → code | One-pager → approval → full PRD |
 | "Verification" | Tests pass, build succeeds | Every claim is sourced, every goal is measurable |
-| "Ask first" examples | New dependency, DB migration, remote push | Sharing outside the team, marking a PRD "Approved" |
+| "Ask first" examples | New dependency, DB migration, remote push | Sharing outside the team, a public date or number |
 | "Never" examples | Force-push to main, touch `.env` | State a guess as fact, delete a past decision |
 
-## How to use it in a new planning workspace
-
-```bash
-git clone https://github.com/<you>/planning-docs-template.git /tmp/pt
-cp -r /tmp/pt/AGENTS.md /tmp/pt/docs ./
-```
-
-Or mark this repo as a GitHub "template repository" and click "Use this
-template" for each new planning workspace.
-
-Then:
+## How to use it
 
 1. Fill in `docs/01-context.md` and `docs/02-guidelines.md` once for the
-   team/product.
+   product.
 2. For each new idea, start with `docs/prd/_one-pager-template.md`, not
    the full PRD — see `AGENTS.md`'s "Before you write a full PRD."
-3. Point your AI tool at `AGENTS.md` as its entry point.
+3. When a PRD is approved, it hands off to a spec in `app/docs/specs/` —
+   see the root `README.md`.
 
 ## Updating this template
 

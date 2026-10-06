@@ -3,7 +3,7 @@
 - Status: Draft | In Review | Approved | Shipped | Shelved
 - Created: YYYY-MM-DD
 - Owner:
-- One-pager (if any): docs/prd/<file>.md
+- One-pager (if any): planning/docs/prd/<file>.md
 
 ## Overview / problem statement
 
@@ -55,3 +55,11 @@ into `docs/todo/` and link it here.
 ## Appendix
 
 Supporting research, links, data behind the claims above.
+
+## Handoff
+
+Filled in once this PRD is `Approved` and work moves to the app.
+
+- Spec(s): app/docs/specs/<file>.md
+- Status of each: (mirror `app/docs/specs/00-index.md`)
+- Anything the spec intentionally left out of this PRD, and why:

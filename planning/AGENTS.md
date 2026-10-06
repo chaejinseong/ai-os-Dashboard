@@ -1,7 +1,9 @@
 # Working Agreement — Product/Service Planning
 
-Entry point for any AI agent (or human) doing planning work in this repo:
-PRDs, one-pagers, requirements, roadmap decisions. Read this first. Keep
+Entry point for any AI agent (or human) doing planning work in
+`planning/`: PRDs, one-pagers, requirements, roadmap decisions. The
+workspace root `AGENTS.md` (roles, paths, handoff) applies too — read it
+first. Keep
 everything in `docs/` short — it's re-read on every task, so bloat here
 costs tokens on every run.
 
@@ -28,8 +30,6 @@ costs tokens on every run.
 
 **Ask first**
 - Sharing or sending a doc outside the immediate team
-- Marking a PRD's status "Approved" or "Final" (someone with authority to
-  greenlight it should confirm)
 - Committing to a specific public date, number, or promise in any doc that
   might leave the team
 - Changing the status or conclusion of an existing decision record instead
@@ -41,6 +41,7 @@ costs tokens on every run.
 - Deleting a past decision record instead of marking it superseded
 - Publishing anything externally (customers, press, public roadmap) without
   explicit sign-off
+- Marking your own PRD `Approved` — only the human does that
 
 ## Before you write a full PRD
 
@@ -74,6 +75,9 @@ a draft as ready for review:
 - Read it once as the target user would and once as a skeptical
   reviewer — does the problem read as real, and does the solution actually
   address it?
+- Optional, for big bets: get a second opinion from the other agent
+  before review (e.g. Codex's `/codex:adversarial-review` from inside
+  Claude Code), and note what changed because of it.
 
 ## While you work
 
@@ -93,7 +97,11 @@ a draft as ready for review:
 2. Question still open? Add or update `docs/todo/YYMMDD-HHMM-NN-short-title.md`
    and list it in `00-todo-list.md`.
 3. Update `docs/prd/00-index.md` whenever a PRD's status changes.
-4. Update `01-context.md` or `02-guidelines.md` ONLY if something durable
+4. PRD just became `Approved`? Draft the implementation spec in
+   `app/docs/specs/` (status `Draft`, see `app/AGENTS.md`), then link it
+   from the PRD's `## Handoff` section and the index's "Spec(s)" column.
+   Planning ends at the spec — don't start writing code from here.
+5. Update `01-context.md` or `02-guidelines.md` ONLY if something durable
    actually changed (new constraint, new process) — not for one-off facts
    that belong in a single PRD.
 

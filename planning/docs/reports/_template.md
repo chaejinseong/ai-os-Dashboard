@@ -1,8 +1,8 @@
 # <short-title>
 
 - Date: YYYY-MM-DD
-- Author: <name, or "agent">
-- Related initiative (if any): docs/prd/<file>.md
+- Author: claude | codex | <name>
+- Related initiative (if any): planning/docs/prd/<file>.md
 
 ## Decision
 
