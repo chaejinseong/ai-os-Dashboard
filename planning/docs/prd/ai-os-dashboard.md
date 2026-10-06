@@ -156,6 +156,6 @@
   - app/docs/specs/261006-1730-02-m2b-notion.md (M2b)
   - app/docs/specs/261006-1730-03-m2c-github.md (M2c)
   - app/docs/specs/261006-1730-04-m3-ai-judgment.md (M3)
-- Status of each: Draft (app/docs/specs/00-index.md)
+- Status of each: Approved (app/docs/specs/00-index.md)
 - Anything the spec intentionally left out of this PRD, and why: M4는 코드가 아니라
   2주 실사용 평가라 spec 대신 planning/docs/todo/261006-1720-01-m4-evaluation.md 로 둔다.
