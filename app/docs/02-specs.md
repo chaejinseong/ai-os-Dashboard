@@ -10,8 +10,9 @@
 - Language / framework: Tauri 2 — Rust 백엔드(`src-tauri/`) + React +
   TypeScript + Vite 프런트엔드(`src/`)
 - Database: SQLite 로컬 캐시 (`rusqlite`, bundled), 앱 데이터 폴더에 저장
-- Key libraries: `reqwest`(rustls), `oauth2`, `keyring`, `serde`,
-  `tokio`, `chrono`, `thiserror`, `tauri-plugin-opener`
+- Key libraries: Rust — `reqwest`(rustls), `oauth2`, `keyring`, `serde`,
+  `serde_json`, `tokio`, `chrono`, `thiserror`, `async-trait`, `rusqlite`,
+  `tauri-plugin-opener`. 프런트엔드 — `lucide-react` (그 밖의 UI 라이브러리 없음)
 - Deployment target: macOS (Apple Silicon). 배포·서명은 아직 하지 않는다.
 
 ## Commands
@@ -32,8 +33,11 @@ Xcode Command Line Tools.
 - 외부 서비스 API, OAuth, Claude API 호출은 전부 Rust 쪽에서 한다.
   프런트엔드는 Tauri command로 결과만 받는다.
 - OAuth 토큰, OAuth 클라이언트 정보, API 키는 macOS Keychain(`keyring`)에만
-  저장한다. 파일·로그·SQLite·프런트엔드에 두지 않는다.
-- 외부 서비스에는 읽기 전용 권한만 요청한다 (Gmail: `gmail.readonly`).
+  저장한다 (service `com.chaejinseong.ai-os-dashboard`; account `google.*`,
+  `notion.token`, `github.token`, `anthropic.api_key`). 파일·로그·SQLite·프런트엔드에 두지 않는다.
+- 외부 서비스에는 읽기 전용 권한만 요청한다 (Google: `gmail.readonly`,
+  `calendar.readonly`; Notion·GitHub: 읽기 권한 토큰).
+- 화면은 planning/docs/design/ui-design.md 를 따른다. 다크 테마만.
 - 새 데이터 소스는 `Connector` trait을 구현해 추가한다. 화면·판정 코드가
   특정 서비스를 직접 알면 안 된다.
 

@@ -7,6 +7,7 @@ Move a row to "resolved" (or remove it) once a report captures the answer.
 |---|---|---|
 | _(example) 260219-1030-01-pricing-tier-name.md_ | open | Need legal sign-off on new tier naming |
 | 261006-1520-01-first-data-sources.md | resolved | 첫 버전에 연동할 메일·일정·프로젝트 서비스 결정 |
+| 261006-1720-01-m4-evaluation.md | open | 기준선 측정(지금 시작) + 2주 실사용 평가 + OAuth 게시 |
 
 ## How to add an item
 

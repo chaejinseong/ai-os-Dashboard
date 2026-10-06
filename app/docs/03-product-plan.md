@@ -16,10 +16,10 @@
 
 ## Scope
 
-- In scope for the current phase (M1): 앱 골격, 커넥터 인터페이스, Gmail
+- In scope for v1 (M1~M3): 화면(ui-design.md), 커넥터 4개(Gmail·Calendar·Notion·GitHub), Claude 메일 판정, 피드백·비용 기록. M1은 앱 골격, 커넥터 인터페이스, Gmail
   연결(읽기 전용), 로컬 캐시, 주기 동기화, 메일 규칙 판정, 메인 화면.
 - Explicitly out of scope (for now): 쓰기 동작 전부, 여러 사용자, macOS 외
-  플랫폼, M2~M4 (Calendar·Notion·GitHub, Claude API, 피드백, 비용 기록).
+  플랫폼.
 
 ## Requirements
 
@@ -28,6 +28,15 @@
 
 ## Open questions
 
-- Claude API 월 비용 상한 (M3 전에 필요)
-- Google OAuth 동의 화면 게시 여부 (M1은 Testing 상태로 진행)
-- "프로젝트"로 볼 Notion 데이터베이스 (M2 전에 필요)
+- 없음 (2026-10-06 모두 결정 — planning/docs/reports/261006-1720-01-open-questions-resolved.md)
+
+## Milestones → specs
+
+- M1 app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md
+- M2a app/docs/specs/261006-1730-01-m2a-google-calendar.md
+- M2b app/docs/specs/261006-1730-02-m2b-notion.md
+- M2c app/docs/specs/261006-1730-03-m2c-github.md
+- M3 app/docs/specs/261006-1730-04-m3-ai-judgment.md
+- M4 (평가, 코드 없음) planning/docs/todo/261006-1720-01-m4-evaluation.md
+
+화면 설계: planning/docs/design/ui-design.md

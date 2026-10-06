@@ -25,7 +25,7 @@
 | G2 | 앱이 띄운 "놓친 업무" 중 80% 이상이 실제로 조치가 필요한 항목이다 | 항목별 👍/👎 피드백을 앱이 저장. 2주 사용 후 👍 비율 |
 | G3 | 앱이 못 잡은 놓친 업무가 주당 1건 이하다 | 주 1회 네 서비스를 직접 점검해 앱에 없던 항목 수를 기록 |
 | G4 | 화면의 데이터가 15분 이상 묵지 않는다 | 서비스별 마지막 동기화 시각을 화면에 표시 |
-| G5 | Claude API 비용이 월 상한을 넘지 않는다 (상한 금액은 Open questions) | 앱이 호출별 토큰 수를 기록하고 월 누적 비용을 설정 화면에 표시 |
+| G5 | Claude API 비용이 월 상한($5)을 넘지 않는다 | 앱이 호출별 토큰 수를 기록하고 월 누적 비용을 설정 화면에 표시 |
 
 ## Non-goals
 
@@ -98,8 +98,9 @@
 
 ## Design considerations
 
-- 목업 없음. 화면 구조는 요구사항 13을 따른다. 필요하면 spec 단계 전에
-  Figma로 시안을 만든다.
+- 화면 설계: planning/docs/design/ui-design.md (참고 이미지
+  planning/docs/design/reference-dashboard.png). 다크 테마, 사이드바와
+  COMPLETION·BOARD·PIPELINE·MISSED·SCHEDULE 카드로 구성한다.
 - 메뉴 막대 아이콘에 놓친 업무 개수 배지를 다는 것은 nice-to-have다.
 
 ## Technical considerations
@@ -130,11 +131,14 @@
 
 ## Open questions & risks
 
-- Claude API 월 비용 상한을 얼마로 할지 (G5)
-- Google OAuth 동의 화면을 게시할지, Testing 상태로 7일마다 재로그인을
-  감수할지
-- 어떤 Notion 데이터베이스를 "프로젝트"로 볼지, 속성 이름이 무엇인지
-- 위험: AI 판정 품질이 낮으면(G2 미달) 앱을 쓸 이유가 약해진다 — 원페이저의
+결정됨 (2026-10-06, planning/docs/reports/261006-1720-01-open-questions-resolved.md):
+- Claude API 월 상한 **$5**, 모델 **Claude Haiku 4.5** (설정에서 변경 가능)
+- Google OAuth: 개발 중(M1~M3)에는 **Testing**, M4 실사용 전에 게시 절차 확인
+- Notion: **"프로젝트 플래너"** 데이터베이스 (제목 `프로젝트`, 마감 `마감일`,
+  상태 `진행 상태`: 시작 전 / 진행 중 / 완료)
+
+남은 위험:
+- AI 판정 품질이 낮으면(G2 미달) 앱을 쓸 이유가 약해진다 — 원페이저의
   가장 큰 위험. M3 이후 바로 측정한다.
 
 ## Appendix
@@ -146,10 +150,12 @@
 
 ## Handoff
 
-Filled in once this PRD is `Approved` and work moves to the app.
-
-- Spec(s): app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md (M1)
-- Status of each: Draft
-- Anything the spec intentionally left out of this PRD, and why: M2~M4
-  (Calendar·Notion·GitHub 커넥터, Claude API 판정, 피드백, 비용 기록)는
-  별도 spec으로 나눈다. M1은 구조를 검증하는 최소 단위다.
+- Spec(s):
+  - app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md (M1)
+  - app/docs/specs/261006-1730-01-m2a-google-calendar.md (M2a)
+  - app/docs/specs/261006-1730-02-m2b-notion.md (M2b)
+  - app/docs/specs/261006-1730-03-m2c-github.md (M2c)
+  - app/docs/specs/261006-1730-04-m3-ai-judgment.md (M3)
+- Status of each: Draft (app/docs/specs/00-index.md)
+- Anything the spec intentionally left out of this PRD, and why: M4는 코드가 아니라
+  2주 실사용 평가라 spec 대신 planning/docs/todo/261006-1720-01-m4-evaluation.md 로 둔다.
