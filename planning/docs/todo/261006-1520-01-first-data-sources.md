@@ -1,6 +1,6 @@
 # first-data-sources
 
-- Status: open
+- Status: resolved
 - Created: 2026-10-06
 - Owner: chaejinseong
 - Related initiative (if any): planning/docs/prd/ai-os-dashboard-one-pager.md
@@ -12,11 +12,13 @@
 
 ## What's needed to resolve it
 
-- [ ] 메일 서비스 결정 (예: Gmail)
-- [ ] 일정 서비스 결정 (예: Google Calendar)
-- [ ] 프로젝트 도구 결정 (예: Notion)
+- [x] 메일: Gmail
+- [x] 일정: Google Calendar
+- [x] 프로젝트: Notion, GitHub
 
 ## Notes
 
 예시는 이 Claude 계정에 연결된 서비스를 보고 떠올린 것일 뿐, 확정 사항은
 아니다.
+
+Resolved: planning/docs/reports/261006-1530-01-v1-scope-decisions.md
