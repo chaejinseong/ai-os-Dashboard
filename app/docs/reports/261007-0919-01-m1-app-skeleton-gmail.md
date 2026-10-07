@@ -262,8 +262,46 @@ Rust 명령은 `CARGO_HOME=/tmp/claude-501/cargo-home`, `CARGO_NET_OFFLINE=true`
 ## Review
 
 - Reviewer: Pam (claude)
-- Round 1: 검토 대기
-- Result: 검토 대기
+- Round 1 (2026-10-07, commits 948de4b + 7e425ba): must-fix 1, suggestion 4
+- Result: must-fix 남음 — 구현자 수정 후 Round 2
+
+리뷰어 재실행 (`CARGO_HOME=/tmp/claude-501/cargo-home`, `--offline`):
+`cargo test` 6 passed · `cargo clippy -- -D warnings` 경고 0 ·
+`npm run build` 성공 · `grep -rln "gmail" src-tauri/src --include='*.rs'`
+→ `oauth.rs`, `connectors/mod.rs`, `connectors/gmail.rs`. 보고서의 파일별
+Purpose/Method는 코드와 일치한다. 수동 확인은 사람 몫으로 미완료.
+
+### Round 1 findings
+
+1. **must-fix** — `app/src-tauri/src/oauth.rs:115-117`: 로그인 콜백
+   리스너에서 연결 하나가 실패하면 로그인 전체가 실패한다. `accept` 오류,
+   5초 읽기 시간 초과, 읽기 오류가 모두 `?`로 함수 밖으로 나간다. Chrome
+   등은 리다이렉트할 때 아무것도 보내지 않는 예비 TCP 연결을 함께 여는
+   일이 흔하다. 그 연결이 먼저 accept되면 5초 뒤 "로그인 콜백 시간
+   초과"로 끝나고, 뒤에 대기 중인 진짜 콜백은 읽히지 않는다. Done when의
+   "연결 → 브라우저 로그인" 흐름이 깨질 수 있다. 수정: 연결 하나의
+   accept/읽기 실패나 시간 초과는 그 소켓만 버리고 `continue`한다.
+   전체 5분 제한은 그대로 둔다.
+2. **suggestion** — `app/src-tauri/src/connectors/gmail.rs:108`: 스레드
+   하나를 변환하지 못하면(`thread_to_item`이 `None`) Gmail 동기화 전체가
+   실패하고 캐시가 계속 예전 상태로 남는다. `thread_to_item`이 `Option`을
+   돌려주는 이유대로, 그 스레드만 건너뛰는 편이 낫다.
+3. **suggestion** — `app/src-tauri/src/oauth.rs:79`: 토큰 갱신이
+   네트워크 오류로 실패해도 "다시 로그인 필요"로 표시된다. spec은 이
+   문구를 갱신 거부(`invalid_grant` 등)에만 쓴다. 오프라인일 때 사용자가
+   불필요하게 다시 로그인하게 된다. 요청 실패와 서버 거부를 나눠 표시하는
+   편이 낫다.
+4. **suggestion** — `app/src-tauri/src/commands.rs:100`:
+   `disconnect_google`이 Google 소스만이 아니라 레지스트리의 모든 커넥터
+   캐시와 상태를 지운다. M1에는 Gmail뿐이라 지금은 맞지만, M2b/c에서
+   Notion·GitHub를 등록하면 Google 연결 해제 때 그 캐시도 지워진다.
+   M2 spec을 구현할 때 Google 소스만 지우도록 바꿔야 한다. 지금 고치지
+   않으면 M2 리뷰에서 다시 확인한다.
+5. **suggestion** — 가독성: `app/src/**/*.tsx` 대부분이 컴파일러 출력처럼
+   한 줄에 몰려 있다(200자 넘는 줄 14개, `useState` 다섯 개가 한 줄).
+   `oauth.rs`의 콜백 블록(114-126행)은 rustfmt가 포맷하지 못한 상태다.
+   동작에는 문제가 없지만 리뷰와 M2·M3 수정이 어렵다. 여러 줄 JSX로
+   풀고, 콜백 처리를 작은 함수로 빼서 rustfmt가 포맷하게 하는 편이 낫다.
 
 ## Follow-ups
 
