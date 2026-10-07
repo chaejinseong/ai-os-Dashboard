@@ -1,0 +1,21 @@
+:root {
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;
+  color:var(--text);
+  background:var(--bg);
+  font-synthesis:none;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+  color-scheme:dark;
+  --bg:#0f141c;
+  --surface:#171d27;
+  --surface-2:#1e2531;
+  --border:#262e3b;
+  --text:#e8ebf0;
+  --text-muted:#8a93a3;
+  --accent:#e8a54b;
+  --danger:#e2574c;
+  --success:#4caf7d;
+  --warning:#e0b341
+}
+
