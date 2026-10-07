@@ -263,7 +263,7 @@ Rust 명령은 `CARGO_HOME=/tmp/claude-501/cargo-home`, `CARGO_NET_OFFLINE=true`
 
 - Reviewer: Pam (claude)
 - Round 1 (2026-10-07, commits 948de4b + 7e425ba): must-fix 1, suggestion 4
-- Result: must-fix 남음 — 구현자 수정 후 Round 2
+- Result: must-fix 코드 수정 완료 — 회귀 테스트 권한 해제 실행 및 Round 2 확인 대기
 
 리뷰어 재실행 (`CARGO_HOME=/tmp/claude-501/cargo-home`, `--offline`):
 `cargo test` 6 passed · `cargo clippy -- -D warnings` 경고 0 ·
@@ -282,6 +282,8 @@ Purpose/Method는 코드와 일치한다. 수동 확인은 사람 몫으로 미�
    "연결 → 브라우저 로그인" 흐름이 깨질 수 있다. 수정: 연결 하나의
    accept/읽기 실패나 시간 초과는 그 소켓만 버리고 `continue`한다.
    전체 5분 제한은 그대로 둔다.
+   - 구현자 해결: `receive_callback`으로 루프를 분리했다. accept 오류는 짧게 대기 후 재시도하고, 연결별 읽기 오류·시간 초과·EOF는 그 소켓만 버린다. `GoogleAuth::connect`의 전체 300초 제한은 유지한다. 대기 중인 실제 콜백 처리와 전체 제한 보존 회귀 테스트를 추가했다. 커밋은 god가 생성한다.
+   - god 검증(샌드박스 밖, 2026-10-07): `CARGO_HOME=/tmp/claude-501/cargo-home cargo test --offline --manifest-path src-tauri/Cargo.toml` → `test result: ok. 8 passed; 0 failed` (신규 `oauth::tests::idle_and_closed_connections_do_not_abort_callback`, `oauth::tests::idle_connections_preserve_overall_deadline` 포함).
 2. **suggestion** — `app/src-tauri/src/connectors/gmail.rs:108`: 스레드
    하나를 변환하지 못하면(`thread_to_item`이 `None`) Gmail 동기화 전체가
    실패하고 캐시가 계속 예전 상태로 남는다. `thread_to_item`이 `Option`을
@@ -303,6 +305,29 @@ Purpose/Method는 코드와 일치한다. 수동 확인은 사람 몫으로 미�
    동작에는 문제가 없지만 리뷰와 M2·M3 수정이 어렵다. 여러 줄 JSX로
    풀고, 콜백 처리를 작은 함수로 빼서 rustfmt가 포맷하게 하는 편이 낫다.
 
+### Round 1 수정 파일과 검증 (2026-10-07, Jim)
+
+- `app/src-tauri/src/oauth.rs`
+  - Where: `receive_callback`, `GoogleAuth::connect`, `tests`
+  - Purpose: 브라우저 예비 연결로 실제 로그인이 중단되는 문제를 해결한다.
+  - Method: 연결 오류는 반복문 안에서 격리하고 5분 제한은 호출부에 둔다. 실제 loopback으로 idle·닫힌 연결 뒤 정상 콜백 및 전체 시간 제한을 검증한다.
+- `app/docs/todo/261007-0931-01-google-disconnect-scope.md`, `app/docs/todo/00-todo-list.md`
+  - Where: What's left, TODO Index
+  - Purpose: suggestion 4를 M2 전에 추적한다.
+  - Method: Google 외 소스 캐시 보존과 검증을 후속 작업으로 기록한다.
+- `app/docs/reports/261007-0919-01-m1-app-skeleton-gmail.md`
+  - Where: Review
+  - Purpose: must-fix 해결 방법과 검증 한계를 기록한다.
+  - Method: 리뷰 원문을 유지하고 해결 내용과 실제 실행 결과를 덧붙인다.
+
+실행 결과 (`CARGO_HOME=/tmp/claude-501/cargo-home`):
+- `cargo test --offline --manifest-path src-tauri/Cargo.toml` → `6 passed; 2 failed`. 신규 두 테스트는 `TcpListener::bind`에서 `PermissionDenied: Operation not permitted`로 중단됐다. 샌드박스 밖에서 재실행 요청; 테스트를 건너뛰지 않았다.
+- `CARGO_NET_OFFLINE=true cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` → exit 0, `Finished dev profile ... in 2.32s`, 경고 0.
+- `npm run build` → exit 0, `✓ 1585 modules transformed.`, `✓ built in 229ms`.
+- suggestion 2/3 및 TSX 전반 포맷 변경은 이번 must-fix 범위에서 제외했다.
+
 ## Follow-ups
 
 - Google Cloud 설정과 실제 로그인·캐시 재시작·Keychain 삭제 수동 확인: app/docs/todo/261006-1535-01-google-cloud-setup.md. 실제 계정에는 접속하지 않았다.
+
+- M2 전 Google 연결 해제 범위 제한: app/docs/todo/261007-0931-01-google-disconnect-scope.md.

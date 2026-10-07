@@ -110,21 +110,12 @@ impl GoogleAuth {
         app.opener()
             .open_url(url.as_str(), None::<&str>)
             .map_err(|_| "브라우저 열기 실패")?;
-        let code=tokio::time::timeout(Duration::from_secs(300),async {
-            loop {
-                let (mut socket,_)=listener.accept().await.map_err(|_|"로그인 콜백 실패".to_string())?;
-                let mut bytes=Vec::new();let mut chunk=[0u8;1024];
-                loop {let n=tokio::time::timeout(Duration::from_secs(5),socket.read(&mut chunk)).await.map_err(|_|"로그인 콜백 시간 초과")?.map_err(|_|"로그인 콜백 읽기 실패")?;if n==0{break;}bytes.extend_from_slice(&chunk[..n]);if bytes.windows(4).any(|b|b==b"\r\n\r\n")||bytes.len()>8192{break;}}
-                let request=String::from_utf8_lossy(&bytes);let target=request.lines().next().and_then(|line|line.strip_prefix("GET ")).and_then(|line|line.split_whitespace().next()).unwrap_or("");
-                let parsed=oauth2::url::Url::parse(&format!("http://127.0.0.1:{port}{target}")).map_err(|_|"로그인 콜백 오류")?;
-                let params:std::collections::HashMap<_,_>=parsed.query_pairs().into_owned().collect();
-                let valid=parsed.path()=="/callback" && params.get("state").is_some_and(|v|v==state.secret());
-                let body=if valid{"앱으로 돌아가세요"}else{"잘못된 로그인 요청"};let status=if valid{"200 OK"}else{"400 Bad Request"};
-                let reply=format!("HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());let _=socket.write_all(reply.as_bytes()).await;
-                if !valid {continue;}
-                return params.get("code").cloned().ok_or_else(||"로그인이 취소되었습니다".to_string());
-            }
-        }).await.map_err(|_|"로그인 시간 초과 (5분)")??;
+        let code = tokio::time::timeout(
+            Duration::from_secs(300),
+            receive_callback(&listener, state.secret(), Duration::from_secs(5)),
+        )
+        .await
+        .map_err(|_| "로그인 시간 초과 (5분)")??;
         drop(listener);
         let response = client
             .exchange_code(AuthorizationCode::new(code))
@@ -148,5 +139,112 @@ impl GoogleAuth {
         secrets::delete("google.refresh_token")?;
         *self.session.lock().await = Session::default();
         Ok(())
+    }
+}
+
+// A browser may open an idle spare connection before sending the callback.
+// Connection failures must not terminate the enclosing login deadline.
+async fn receive_callback(
+    listener: &TcpListener,
+    expected_state: &str,
+    read_timeout: Duration,
+) -> Result<String, String> {
+    'connections: loop {
+        let Ok((mut socket, _)) = listener.accept().await else {
+            // Avoid a hot retry loop if an OS resource error persists.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            continue;
+        };
+        let mut bytes = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            let n = match tokio::time::timeout(read_timeout, socket.read(&mut chunk)).await {
+                Ok(Ok(0)) | Ok(Err(_)) | Err(_) => continue 'connections,
+                Ok(Ok(n)) => n,
+            };
+            bytes.extend_from_slice(&chunk[..n]);
+            if bytes.len() > 8192 {
+                continue 'connections;
+            }
+            if bytes.windows(4).any(|b| b == b"\r\n\r\n") {
+                break;
+            }
+        }
+        let request = String::from_utf8_lossy(&bytes);
+        let target = request
+            .lines()
+            .next()
+            .and_then(|line| line.strip_prefix("GET "))
+            .and_then(|line| line.split_whitespace().next())
+            .unwrap_or("");
+        let Ok(parsed) = oauth2::url::Url::parse(&format!("http://127.0.0.1{target}")) else {
+            continue;
+        };
+        let params: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+        let valid = parsed.path() == "/callback"
+            && params
+                .get("state")
+                .is_some_and(|value| value == expected_state);
+        let body = if valid {
+            "앱으로 돌아가세요"
+        } else {
+            "잘못된 로그인 요청"
+        };
+        let status = if valid { "200 OK" } else { "400 Bad Request" };
+        let reply = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()
+        );
+        let _ = socket.write_all(reply.as_bytes()).await;
+        if valid {
+            return params
+                .get("code")
+                .cloned()
+                .ok_or_else(|| "로그인이 취소되었습니다".to_string());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::TcpStream;
+
+    #[tokio::test]
+    async fn idle_and_closed_connections_do_not_abort_callback() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let spare = TcpStream::connect(address).await.unwrap();
+        let closed = TcpStream::connect(address).await.unwrap();
+        drop(closed);
+        let mut callback = TcpStream::connect(address).await.unwrap();
+        callback
+            .write_all(
+                b"GET /callback?state=expected&code=accepted HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        let code = tokio::time::timeout(
+            Duration::from_secs(2),
+            receive_callback(&listener, "expected", Duration::from_millis(25)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(code, "accepted");
+        drop(spare);
+    }
+
+    #[tokio::test]
+    async fn idle_connections_preserve_overall_deadline() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let _spare = TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        assert!(tokio::time::timeout(
+            Duration::from_millis(100),
+            receive_callback(&listener, "expected", Duration::from_millis(25)),
+        )
+        .await
+        .is_err());
     }
 }
