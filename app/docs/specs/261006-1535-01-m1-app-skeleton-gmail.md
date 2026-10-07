@@ -1,11 +1,11 @@
 # m1-app-skeleton-gmail
 
-- Status: Approved (chaejinseong, 2026-10-06)
+- Status: Implemented (codex, 2026-10-07; Approved: chaejinseong, 2026-10-06)
 - Created: 2026-10-06 (rev. 2026-10-06 17:30 — 화면 설계 반영)
 - Author: claude
 - Implementer: codex
 - Source PRD: planning/docs/prd/ai-os-dashboard.md (M1)
-- Reports: app/docs/reports/<file>.md (filled in by the implementer)
+- Reports: app/docs/reports/261007-0919-01-m1-app-skeleton-gmail.md
 
 > Only the human sets `Approved`. Once approved, the implementer builds
 > this without asking for plan approval again — so write it so nobody
@@ -187,8 +187,8 @@ M1에서는 Task·Event·PR 데이터가 없으므로 대부분 0이다. 카드�
 
 ## Done when
 
-- [ ] `npm install` 성공
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 최소 테스트:
+- [x] `npm install` 성공
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 최소 테스트:
   - `missed.rs`: 2일 경계(1일 23시간 → 제외, 2일 → 포함), `last_from_me=true` 제외, 정렬
   - `gmail.rs`: `thread_to_item` — Subject 없음, From이 `"이름 <주소>"` 형식,
     내 주소의 대소문자가 다른 경우
@@ -196,9 +196,9 @@ M1에서는 Task·Event·PR 데이터가 없으므로 대부분 0이다. 카드�
     BOARD의 오늘(지난 마감 포함)/이번 주(일요일 23:59까지)/나중에(마감 없음 포함),
     PIPELINE stage별 개수와 `missed_by_stage`, 항목 0개일 때
   - `store.rs`: 인메모리 SQLite로 `replace_items` 교체·조회
-- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
-- [ ] `npm run build` 성공
-- [ ] `grep -rln "gmail" src-tauri/src --include=*.rs` 결과가
+- [x] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
+- [x] `npm run build` 성공
+- [x] `grep -rln "gmail" src-tauri/src --include=*.rs` 결과가
   `connectors/gmail.rs`, `connectors/mod.rs`(레지스트리 생성), `oauth.rs`(scope 상수)뿐이다
 - [ ] 수동 확인 (사람, `npm run tauri dev`, Google Cloud 설정 후):
   - 참고 이미지와 같은 배치의 다크 화면이 뜬다

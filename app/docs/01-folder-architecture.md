@@ -9,7 +9,10 @@
 app/
   docs/                 작업 문서 (AGENTS.md 참고)
   src/                  React 프런트엔드
-    components/         화면 컴포넌트
+    components/         사이드바·타이틀·상단 바
+      cards/            개요 카드 5개
+    pages/              개요·연결·업무·알림·설정
+    styles/             다크 테마 토큰·공통 스타일
     api.ts              Tauri command 호출 래퍼
   src-tauri/            Rust 백엔드
     src/
@@ -22,10 +25,11 @@ app/
       store.rs          SQLite 캐시
       sync.rs           주기 동기화
       missed.rs         놓친 업무 규칙 판정
+      summary.rs        공통 Item 기반 카드 숫자 계산
   package.json
 ```
 
-(M1 구현 후 실제 구조와 다르면 이 파일을 갱신한다.)
+M1 구현 구조. 각 Rust 모듈의 순수 함수 테스트는 같은 파일에 둔다.
 
 ## Responsibilities
 
