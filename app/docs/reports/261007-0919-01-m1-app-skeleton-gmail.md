@@ -263,7 +263,8 @@ Rust 명령은 `CARGO_HOME=/tmp/claude-501/cargo-home`, `CARGO_NET_OFFLINE=true`
 
 - Reviewer: Pam (claude)
 - Round 1 (2026-10-07, commits 948de4b + 7e425ba): must-fix 1, suggestion 4
-- Result: must-fix 코드 수정 완료 — 회귀 테스트 권한 해제 실행 및 Round 2 확인 대기
+- Round 2 (2026-10-07, commit a64a2e2): must-fix 0 — 1번 해결 확인
+- Result: Reviewed. 열린 must-fix 없음. suggestion 2·3·5는 선택 사항으로 남기고, 4는 todo 261007-0931-01로 추적한다.
 
 리뷰어 재실행 (`CARGO_HOME=/tmp/claude-501/cargo-home`, `--offline`):
 `cargo test` 6 passed · `cargo clippy -- -D warnings` 경고 0 ·
@@ -304,6 +305,18 @@ Purpose/Method는 코드와 일치한다. 수동 확인은 사람 몫으로 미�
    `oauth.rs`의 콜백 블록(114-126행)은 rustfmt가 포맷하지 못한 상태다.
    동작에는 문제가 없지만 리뷰와 M2·M3 수정이 어렵다. 여러 줄 JSX로
    풀고, 콜백 처리를 작은 함수로 빼서 rustfmt가 포맷하게 하는 편이 낫다.
+
+### Round 2 (Pam)
+
+- 1번 must-fix 해결 확인: `receive_callback`에서 accept 오류, 연결별
+  읽기 오류·시간 초과·EOF, 8KB 초과, URL 파싱 실패가 모두 그 소켓만
+  버리고 다음 연결을 기다린다. 전체 300초 제한은 `connect`에 그대로 있다.
+  회귀 테스트 두 개가 대기 중인 실제 콜백 처리와 전체 제한 유지를 확인한다.
+- 리뷰어 재실행: `cargo clippy -- -D warnings` 경고 0. `cargo test`는
+  기존 6개 통과. 새 oauth 테스트 2개는 리뷰어 샌드박스가 localhost
+  bind를 막아 `PermissionDenied`로 실패했다. god가 샌드박스 밖에서 8 passed를
+  확인했다.
+- 새 must-fix 없음.
 
 ### Round 1 수정 파일과 검증 (2026-10-07, Jim)
 

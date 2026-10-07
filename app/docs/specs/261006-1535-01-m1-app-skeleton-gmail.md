@@ -1,6 +1,6 @@
 # m1-app-skeleton-gmail
 
-- Status: Implemented (codex, 2026-10-07; Approved: chaejinseong, 2026-10-06)
+- Status: Reviewed (claude/Pam, 2026-10-07; Implemented: codex, 2026-10-07; Approved: chaejinseong, 2026-10-06)
 - Created: 2026-10-06 (rev. 2026-10-06 17:30 — 화면 설계 반영)
 - Author: claude
 - Implementer: codex
