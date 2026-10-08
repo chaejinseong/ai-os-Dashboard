@@ -1,16 +1,36 @@
-use crate::model::{Item, Settings, SourceStatus};
-use rusqlite::{params, Connection};
+use crate::{
+    ai::{self, Judgment, ResultWithUsage},
+    model::{Item, Settings, SourceStatus},
+};
+use chrono::{DateTime, Duration, Local, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 
 pub struct Store {
     conn: Connection,
+}
+#[derive(Serialize)]
+pub struct FeedbackStats {
+    pub up: u64,
+    pub down: u64,
+    pub ratio: f64,
+}
+#[derive(Serialize)]
+pub struct Stats {
+    pub month_cost_usd: f64,
+    pub month_input_tokens: u64,
+    pub month_output_tokens: u64,
+    pub cap_usd: f64,
+    pub feedback_14d: FeedbackStats,
 }
 impl Store {
     pub fn open(path: &Path) -> Result<Self, String> {
         Self::from_connection(Connection::open(path).map_err(|e| e.to_string())?)
     }
     fn from_connection(conn: Connection) -> Result<Self, String> {
-        conn.execute_batch("CREATE TABLE IF NOT EXISTS items(source TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(source,id)); CREATE TABLE IF NOT EXISTS source_status(source TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO settings VALUES('sync_minutes','15'),('mail_unanswered_days','2'),('github_review_days','1');").map_err(|e|e.to_string())?;
+        conn.execute_batch("CREATE TABLE IF NOT EXISTS items(source TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(source,id)); CREATE TABLE IF NOT EXISTS source_status(source TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS ai_judgments(thread_id TEXT NOT NULL,last_message_id TEXT NOT NULL,needs_action INTEGER NOT NULL,summary TEXT,created_at INTEGER NOT NULL,PRIMARY KEY(thread_id,last_message_id)); CREATE TABLE IF NOT EXISTS ai_usage(id INTEGER PRIMARY KEY,model TEXT NOT NULL,input_tokens INTEGER NOT NULL,output_tokens INTEGER NOT NULL,cost_usd REAL NOT NULL,created_at INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS feedback(source TEXT NOT NULL,item_id TEXT NOT NULL,vote INTEGER NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(source,item_id)); INSERT OR IGNORE INTO settings VALUES('sync_minutes','15'),('mail_unanswered_days','2'),('github_review_days','1'),('ai_model','claude-haiku-4-5-20251001'),('ai_monthly_cap_usd','5'),('ai_price_in_per_mtok','1'),('ai_price_out_per_mtok','5');").map_err(|e|e.to_string())?;
         Ok(Self { conn })
     }
     pub fn replace_items(&mut self, source: &str, items: &[Item]) -> Result<(), String> {
@@ -140,7 +160,27 @@ impl Store {
         Ok(Settings {
             sync_minutes: read("sync_minutes")?,
             mail_unanswered_days: read("mail_unanswered_days")?,
+            ai_model: self.setting("ai_model")?,
+            ai_monthly_cap_usd: self
+                .setting("ai_monthly_cap_usd")?
+                .parse::<f64>()
+                .map_err(|e| e.to_string())?,
+            ai_price_in_per_mtok: self
+                .setting("ai_price_in_per_mtok")?
+                .parse::<f64>()
+                .map_err(|e| e.to_string())?,
+            ai_price_out_per_mtok: self
+                .setting("ai_price_out_per_mtok")?
+                .parse::<f64>()
+                .map_err(|e| e.to_string())?,
         })
+    }
+    fn setting(&self, key: &str) -> Result<String, String> {
+        self.conn
+            .query_row("SELECT value FROM settings WHERE key=?1", [key], |row| {
+                row.get(0)
+            })
+            .map_err(|error| error.to_string())
     }
     pub fn save_settings(&mut self, s: &Settings) -> Result<(), String> {
         s.validate()?;
@@ -155,7 +195,140 @@ impl Store {
             )
             .map_err(|e| e.to_string())?;
         }
+        for (key, value) in [
+            ("ai_model", s.ai_model.clone()),
+            ("ai_monthly_cap_usd", s.ai_monthly_cap_usd.to_string()),
+            ("ai_price_in_per_mtok", s.ai_price_in_per_mtok.to_string()),
+            ("ai_price_out_per_mtok", s.ai_price_out_per_mtok.to_string()),
+        ] {
+            tx.execute(
+                "INSERT OR REPLACE INTO settings VALUES(?1,?2)",
+                params![key, value],
+            )
+            .map_err(|error| error.to_string())?;
+        }
         tx.commit().map_err(|e| e.to_string())
+    }
+    pub fn has_judgment(&self, thread_id: &str, message_id: &str) -> Result<bool, String> {
+        self.conn
+            .query_row(
+                "SELECT 1 FROM ai_judgments WHERE thread_id=?1 AND last_message_id=?2",
+                params![thread_id, message_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map(|found| found.is_some())
+            .map_err(|error| error.to_string())
+    }
+    pub fn judgments(&self) -> Result<HashMap<(String, String), Judgment>, String> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT thread_id,last_message_id,needs_action,summary FROM ai_judgments")
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    (row.get(0)?, row.get(1)?),
+                    Judgment {
+                        needs_action: row.get::<_, i64>(2)? != 0,
+                        summary: row.get(3)?,
+                    },
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|error| error.to_string())
+    }
+    pub fn feedback_votes(&self) -> Result<HashMap<(String, String), i8>, String> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT source,item_id,vote FROM feedback")
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| Ok(((row.get(0)?, row.get(1)?), row.get(2)?)))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|error| error.to_string())
+    }
+    pub fn record_judgment(
+        &mut self,
+        thread_id: &str,
+        message_id: &str,
+        result: &ResultWithUsage,
+        model: &str,
+        cost: f64,
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        let transaction = self.conn.transaction().map_err(|error| error.to_string())?;
+        let inserted = transaction
+            .execute(
+                "INSERT OR IGNORE INTO ai_judgments VALUES(?1,?2,?3,?4,?5)",
+                params![
+                    thread_id,
+                    message_id,
+                    i64::from(result.judgment.needs_action),
+                    result.judgment.summary,
+                    now.timestamp()
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        if inserted == 1 {
+            transaction.execute("INSERT INTO ai_usage(model,input_tokens,output_tokens,cost_usd,created_at) VALUES(?1,?2,?3,?4,?5)",
+                params![model, result.input_tokens, result.output_tokens, cost, now.timestamp()])
+                .map_err(|error| error.to_string())?;
+        }
+        transaction.commit().map_err(|error| error.to_string())
+    }
+    pub fn set_feedback(
+        &self,
+        source: &str,
+        item_id: &str,
+        vote: i8,
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        if ![-1, 1].contains(&vote) {
+            return Err("피드백은 👍 또는 👎만 선택하세요".into());
+        }
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO feedback VALUES(?1,?2,?3,?4)",
+                params![source, item_id, vote, now.timestamp()],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    pub fn month_cost(&self, now: DateTime<Local>) -> Result<f64, String> {
+        self.conn.query_row("SELECT COALESCE(SUM(cost_usd),0) FROM ai_usage WHERE created_at>=?1 AND created_at<=?2",
+            params![ai::month_start_utc(now).timestamp(), now.timestamp()], |row| row.get(0))
+            .map_err(|error| error.to_string())
+    }
+    pub fn stats(&self, now: DateTime<Local>) -> Result<Stats, String> {
+        let (cost, input, output): (f64, u64, u64) = self.conn.query_row(
+            "SELECT COALESCE(SUM(cost_usd),0),COALESCE(SUM(input_tokens),0),COALESCE(SUM(output_tokens),0) FROM ai_usage WHERE created_at>=?1 AND created_at<=?2",
+            params![ai::month_start_utc(now).timestamp(), now.timestamp()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).map_err(|error| error.to_string())?;
+        let (up, down): (u64, u64) = self.conn.query_row(
+            "SELECT COALESCE(SUM(CASE WHEN vote=1 THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN vote=-1 THEN 1 ELSE 0 END),0) FROM feedback WHERE created_at>=?1 AND created_at<=?2",
+            params![(now - Duration::days(14)).timestamp(), now.timestamp()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).map_err(|error| error.to_string())?;
+        let total = up + down;
+        Ok(Stats {
+            month_cost_usd: cost,
+            month_input_tokens: input,
+            month_output_tokens: output,
+            cap_usd: self.settings()?.ai_monthly_cap_usd,
+            feedback_14d: FeedbackStats {
+                up,
+                down,
+                ratio: if total == 0 {
+                    0.0
+                } else {
+                    up as f64 / total as f64
+                },
+            },
+        })
     }
 }
 #[cfg(test)]
@@ -206,5 +379,91 @@ mod tests {
         assert_eq!(store.github_login().unwrap().as_deref(), Some("octocat"));
         store.clear_github_login().unwrap();
         assert!(store.github_login().unwrap().is_none());
+    }
+    #[test]
+    fn judgment_is_cached_once_and_month_stats_use_local_boundary() {
+        use chrono::TimeZone;
+        let mut store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let now = Local.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap();
+        let result = ResultWithUsage {
+            judgment: Judgment {
+                needs_action: true,
+                summary: Some("답장".into()),
+            },
+            input_tokens: 100,
+            output_tokens: 10,
+        };
+        let before = now - Duration::seconds(1);
+        store
+            .record_judgment(
+                "old",
+                "m1",
+                &result,
+                "model",
+                0.001,
+                before.with_timezone(&Utc),
+            )
+            .unwrap();
+        store
+            .record_judgment(
+                "new",
+                "m2",
+                &result,
+                "model",
+                0.002,
+                now.with_timezone(&Utc),
+            )
+            .unwrap();
+        store
+            .record_judgment(
+                "new",
+                "m2",
+                &result,
+                "model",
+                0.002,
+                now.with_timezone(&Utc),
+            )
+            .unwrap();
+        assert!(store.has_judgment("new", "m2").unwrap());
+        assert!(!store.has_judgment("new", "changed").unwrap());
+        assert_eq!(
+            store.judgments().unwrap()[&("new".into(), "m2".into())]
+                .summary
+                .as_deref(),
+            Some("답장")
+        );
+        let stats = store.stats(now + Duration::seconds(1)).unwrap();
+        assert!((stats.month_cost_usd - 0.002).abs() < 1e-9);
+        assert_eq!(stats.month_input_tokens, 100);
+        assert_eq!(stats.month_output_tokens, 10);
+        assert!((store.month_cost(now + Duration::seconds(1)).unwrap() - 0.002).abs() < 1e-9);
+    }
+    #[test]
+    fn feedback_counts_and_settings_round_trip() {
+        let mut store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let now = Local::now();
+        let mut settings = store.settings().unwrap();
+        assert_eq!(settings.ai_model, "claude-haiku-4-5-20251001");
+        assert_eq!(settings.ai_monthly_cap_usd, 5.0);
+        settings.ai_monthly_cap_usd = 0.0001;
+        settings.ai_model = "test-model".into();
+        store.save_settings(&settings).unwrap();
+        assert_eq!(store.settings().unwrap().ai_model, "test-model");
+        store
+            .set_feedback("gmail", "a", 1, now.with_timezone(&Utc))
+            .unwrap();
+        store
+            .set_feedback("github", "b", -1, now.with_timezone(&Utc))
+            .unwrap();
+        assert_eq!(
+            store.feedback_votes().unwrap()[&("github".into(), "b".into())],
+            -1
+        );
+        let stats = store.stats(now).unwrap();
+        assert_eq!((stats.feedback_14d.up, stats.feedback_14d.down), (1, 1));
+        assert_eq!(stats.feedback_14d.ratio, 0.5);
+        assert!(store
+            .set_feedback("gmail", "a", 0, now.with_timezone(&Utc))
+            .is_err());
     }
 }

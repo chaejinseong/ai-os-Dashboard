@@ -1,3 +1,4 @@
+mod ai;
 mod commands;
 mod connectors;
 mod missed;
@@ -44,7 +45,10 @@ pub fn run() {
             commands::disconnect_github,
             commands::get_github_login,
             commands::get_settings,
-            commands::save_settings
+            commands::save_settings,
+            commands::save_anthropic_key,
+            commands::set_feedback,
+            commands::get_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running application");

@@ -135,6 +135,7 @@ mod tests {
             item: items[2].clone(),
             reason: "test".into(),
             since: now.with_timezone(&Utc),
+            summary: None,
         }];
         let s = summarize(&items, &missed, now, 7);
         assert_eq!((s.completion.done, s.completion.left), (1, 1));

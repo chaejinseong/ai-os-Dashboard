@@ -42,12 +42,20 @@ pub struct SourceStatus {
 pub struct Settings {
     pub sync_minutes: u32,
     pub mail_unanswered_days: u32,
+    pub ai_model: String,
+    pub ai_monthly_cap_usd: f64,
+    pub ai_price_in_per_mtok: f64,
+    pub ai_price_out_per_mtok: f64,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
             sync_minutes: 15,
             mail_unanswered_days: 2,
+            ai_model: "claude-haiku-4-5-20251001".into(),
+            ai_monthly_cap_usd: 5.0,
+            ai_price_in_per_mtok: 1.0,
+            ai_price_out_per_mtok: 5.0,
         }
     }
 }
@@ -56,7 +64,18 @@ impl Settings {
         if !(1..=1440).contains(&self.sync_minutes)
             || !(1..=365).contains(&self.mail_unanswered_days)
         {
-            Err("동기화는 1~1440분, 미응답 기준은 1~365일로 입력하세요".into())
+            return Err("동기화는 1~1440분, 미응답 기준은 1~365일로 입력하세요".into());
+        }
+        if self.ai_model.trim().is_empty()
+            || ![
+                self.ai_monthly_cap_usd,
+                self.ai_price_in_per_mtok,
+                self.ai_price_out_per_mtok,
+            ]
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
+        {
+            Err("AI 모델을 입력하고 상한·가격은 0 이상의 숫자로 입력하세요".into())
         } else {
             Ok(())
         }

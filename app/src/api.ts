@@ -26,6 +26,7 @@ export interface MissedItem {
     item: Item;
     reason: string;
     since: string;
+    summary: string | null;
 }
 export interface Summary {
     completion: {
@@ -56,6 +57,18 @@ export interface Dashboard {
 export interface Settings {
     sync_minutes: number;
     mail_unanswered_days: number;
+    ai_model: string;
+    ai_monthly_cap_usd: number;
+    ai_price_in_per_mtok: number;
+    ai_price_out_per_mtok: number;
+}
+export interface Stats {
+    month_cost_usd: number;
+    month_input_tokens: number;
+    month_output_tokens: number;
+    cap_usd: number;
+    feedback_14d: { up: number; down: number; ratio: number };
+    key_last4: string | null;
 }
 export const api = {
     dashboard: (periodDays: number) => invoke<Dashboard>('get_dashboard', { periodDays }),
@@ -68,6 +81,9 @@ export const api = {
     saveGithub: (token: string) => invoke<void>('save_github', { token }),
     disconnectGithub: () => invoke<void>('disconnect_github'),
     githubLogin: () => invoke<string | null>('get_github_login'),
+    saveAnthropicKey: (key: string) => invoke<void>('save_anthropic_key', { key }),
+    setFeedback: (source: string, itemId: string, vote: 1 | -1) => invoke<void>('set_feedback', { source, itemId, vote }),
+    stats: () => invoke<Stats>('get_stats'),
     onUpdate: (handler: () => void) => listen('dashboard-updated', handler),
 };
 export async function openItem(item: Item) { try {

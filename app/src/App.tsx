@@ -16,7 +16,11 @@ export default function App() {
   const [period, setPeriod] = useState(7);
   const [data, setData] = useState<Dashboard | null>(null);
   const [items, setItems] = useState<Item[]>([]);
-  const [settings, setSettings] = useState<SettingsData>({ sync_minutes: 15, mail_unanswered_days: 2 });
+  const [settings, setSettings] = useState<SettingsData>({
+    sync_minutes: 15, mail_unanswered_days: 2,
+    ai_model: 'claude-haiku-4-5-20251001', ai_monthly_cap_usd: 5,
+    ai_price_in_per_mtok: 1, ai_price_out_per_mtok: 5,
+  });
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,12 @@
-use crate::{connectors::Registry, model::SourceStatus, oauth::GoogleAuth, store::Store};
+use crate::{
+    ai,
+    connectors::Registry,
+    model::{Item, ItemKind, SourceStatus},
+    oauth::GoogleAuth,
+    secrets,
+    store::Store,
+};
+use chrono::{Duration, Utc};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 pub struct AppState {
@@ -40,13 +48,24 @@ impl AppState {
                 continue;
             }
             match connector.fetch().await {
-                Ok(items) => match self.store()?.replace_items(connector.id(), &items) {
-                    Ok(()) => {
-                        status.last_synced = Some(chrono::Utc::now());
-                        status.error = None;
+                Ok(items) => {
+                    let replacement = {
+                        let mut store = self.store()?;
+                        store.replace_items(connector.id(), &items)
+                    };
+                    match replacement {
+                        Ok(()) => {
+                            status.last_synced = Some(chrono::Utc::now());
+                            status.error = None;
+                            if connector.id() == "gmail" {
+                                if let Err(error) = self.judge_mail_candidates(&items, app).await {
+                                    eprintln!("AI 판정 단계 오류: {error}");
+                                }
+                            }
+                        }
+                        Err(e) => status.error = Some(e),
                     }
-                    Err(e) => status.error = Some(e),
-                },
+                }
                 Err(e) => status.error = Some(format!("{}: {e}", connector.label())),
             }
             status.syncing = false;
@@ -55,6 +74,100 @@ impl AppState {
         }
         Ok(())
     }
+    async fn judge_mail_candidates(
+        &self,
+        items: &[Item],
+        app: &tauri::AppHandle,
+    ) -> Result<(), String> {
+        let settings = self.store()?.settings()?;
+        let now = Utc::now();
+        let mut pending = Vec::new();
+        {
+            let store = self.store()?;
+            for item in items
+                .iter()
+                .filter(|item| mail_candidate(item, now, settings.mail_unanswered_days))
+            {
+                let Some((thread, message)) = item.meta["thread_id"]
+                    .as_str()
+                    .zip(item.meta["last_message_id"].as_str())
+                else {
+                    continue;
+                };
+                if !store.has_judgment(thread, message)? {
+                    pending.push(item.clone());
+                }
+            }
+        }
+        if pending.is_empty()
+            || !ai::under_cap(
+                self.store()?
+                    .month_cost(now.with_timezone(&chrono::Local))?,
+                settings.ai_monthly_cap_usd,
+            )
+        {
+            return Ok(());
+        }
+        let Some(key) = secrets::get("anthropic.api_key")? else {
+            return Ok(());
+        };
+        let client = reqwest::Client::new();
+        let mut remaining = pending.into_iter();
+        let mut tasks = tokio::task::JoinSet::new();
+        loop {
+            while tasks.len() < 2
+                && ai::under_cap(
+                    self.store()?.month_cost(chrono::Local::now())?,
+                    settings.ai_monthly_cap_usd,
+                )
+            {
+                let Some(item) = remaining.next() else {
+                    break;
+                };
+                let (key, model, client) = (key.clone(), settings.ai_model.clone(), client.clone());
+                tasks.spawn(async move {
+                    let result = ai::judge(&client, &key, &model, &item).await;
+                    (item, result)
+                });
+            }
+            let Some(completed) = tasks.join_next().await else {
+                break;
+            };
+            match completed {
+                Ok((item, Ok(result))) => {
+                    let Some((thread, message)) = item.meta["thread_id"]
+                        .as_str()
+                        .zip(item.meta["last_message_id"].as_str())
+                    else {
+                        continue;
+                    };
+                    let cost = ai::cost_usd(
+                        result.input_tokens,
+                        result.output_tokens,
+                        settings.ai_price_in_per_mtok,
+                        settings.ai_price_out_per_mtok,
+                    );
+                    self.store()?.record_judgment(
+                        thread,
+                        message,
+                        &result,
+                        &settings.ai_model,
+                        cost,
+                        Utc::now(),
+                    )?;
+                    Self::notify(app);
+                }
+                Ok((_, Err(error))) => eprintln!("AI 판정 요청 오류: {error}"),
+                Err(_) => eprintln!("AI 판정 작업 중단"),
+            }
+        }
+        Ok(())
+    }
+}
+fn mail_candidate(item: &Item, now: chrono::DateTime<Utc>, days: u32) -> bool {
+    item.kind == ItemKind::Email
+        && item.meta["last_from_me"].as_bool() == Some(false)
+        && now - item.timestamp >= Duration::days(days.into())
 }
 pub async fn run(state: Arc<AppState>, app: tauri::AppHandle) {
     let _ = state.sync(&app).await;
@@ -70,5 +183,21 @@ pub async fn run(state: Arc<AppState>, app: tauri::AppHandle) {
             let _ = state.sync(&app).await;
             last = std::time::Instant::now();
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::fixture;
+    #[test]
+    fn mail_candidate_uses_rule_boundary_and_sender() {
+        let now = Utc::now();
+        let mut edge = fixture("edge", ItemKind::Email, now - Duration::days(2));
+        assert!(mail_candidate(&edge, now, 2));
+        edge.timestamp += Duration::seconds(1);
+        assert!(!mail_candidate(&edge, now, 2));
+        edge.timestamp -= Duration::seconds(1);
+        edge.meta["last_from_me"] = true.into();
+        assert!(!mail_candidate(&edge, now, 2));
     }
 }

@@ -1,10 +1,10 @@
 use crate::{
     connectors::github::GitHub,
     connectors::notion::Notion,
-    missed::{self, MissedItem, Rules},
-    model::{Item, ItemKind, Settings, SourceStatus},
+    missed::{self, Context, MissedItem, Rules},
+    model::{Item, ItemKind, Settings, SourceStatus, Stage},
     secrets,
-    store::Store,
+    store::{Stats, Store},
     summary::{self, Summary},
     sync::AppState,
 };
@@ -30,8 +30,13 @@ pub fn get_dashboard(
         return Err("기간은 1, 7, 30일 중 선택하세요".into());
     }
     let store = state.store()?;
-    let items = store.items()?;
+    let mut items = store.items()?;
     let settings = store.settings()?;
+    let context = Context {
+        judgments: store.judgments()?,
+        feedback: store.feedback_votes()?,
+    };
+    apply_ai_stages(&mut items, &context);
     let missed = missed::missed(
         &items,
         chrono::Utc::now(),
@@ -39,12 +44,38 @@ pub fn get_dashboard(
             mail_unanswered_days: settings.mail_unanswered_days,
             github_review_days: store.github_review_days()?,
         },
+        &context,
     );
     Ok(Dashboard {
         summary: summary::summarize(&items, &missed, chrono::Local::now(), period_days),
         missed,
         statuses: store.statuses()?,
     })
+}
+fn apply_ai_stages(items: &mut [Item], context: &Context) {
+    for item in items {
+        if item.kind != ItemKind::Email
+            || context
+                .feedback
+                .get(&(item.source.clone(), item.id.clone()))
+                == Some(&-1)
+        {
+            continue;
+        }
+        let Some((thread, message)) = item.meta["thread_id"]
+            .as_str()
+            .zip(item.meta["last_message_id"].as_str())
+        else {
+            continue;
+        };
+        if context
+            .judgments
+            .get(&(thread.to_owned(), message.to_owned()))
+            .is_some_and(|judgment| judgment.needs_action)
+        {
+            item.stage = Some(Stage::Requested);
+        }
+    }
 }
 #[tauri::command]
 pub fn get_items(
@@ -247,10 +278,63 @@ pub fn save_settings(
     AppState::notify(&app);
     Ok(())
 }
+#[tauri::command]
+pub fn save_anthropic_key(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+    key: String,
+) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("Anthropic API 키를 입력하세요".into());
+    }
+    let _guard = state
+        .operation
+        .try_lock()
+        .map_err(|_| "동기화 중에는 키를 변경할 수 없습니다")?;
+    secrets::set("anthropic.api_key", key)?;
+    AppState::notify(&app);
+    Ok(())
+}
+#[tauri::command]
+pub fn set_feedback(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+    source: String,
+    item_id: String,
+    vote: i8,
+) -> Result<(), String> {
+    state
+        .store()?
+        .set_feedback(&source, &item_id, vote, chrono::Utc::now())?;
+    AppState::notify(&app);
+    Ok(())
+}
+#[derive(Serialize)]
+pub struct StatsResponse {
+    #[serde(flatten)]
+    stats: Stats,
+    key_last4: Option<String>,
+}
+#[tauri::command]
+pub fn get_stats(state: State<'_, Arc<AppState>>) -> Result<StatsResponse, String> {
+    let stats = state.store()?.stats(chrono::Local::now())?;
+    let key_last4 = secrets::get("anthropic.api_key")?.map(|key| {
+        key.chars()
+            .rev()
+            .take(4)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect()
+    });
+    Ok(StatsResponse { stats, key_last4 })
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::Judgment;
     use crate::model::fixture;
     use chrono::Utc;
     use std::path::Path;
@@ -297,5 +381,28 @@ mod tests {
             assert!(status.last_synced.is_some());
             assert_eq!(status.error.as_deref(), Some("saved status"));
         }
+    }
+    #[test]
+    fn ai_required_email_gets_requested_stage() {
+        let mut email = fixture("thread", ItemKind::Email, Utc::now());
+        email.source = "gmail".into();
+        email.meta["thread_id"] = "thread".into();
+        email.meta["last_message_id"] = "message".into();
+        let mut context = Context::default();
+        context.judgments.insert(
+            ("thread".into(), "message".into()),
+            Judgment {
+                needs_action: true,
+                summary: Some("답장".into()),
+            },
+        );
+        apply_ai_stages(std::slice::from_mut(&mut email), &context);
+        assert_eq!(email.stage, Some(Stage::Requested));
+        context
+            .feedback
+            .insert(("gmail".into(), "thread".into()), -1);
+        email.stage = None;
+        apply_ai_stages(std::slice::from_mut(&mut email), &context);
+        assert!(email.stage.is_none());
     }
 }

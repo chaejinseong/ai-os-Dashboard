@@ -554,3 +554,78 @@ p {
 
 }
 
+
+/* M3 judgment, feedback, and usage */
+.ai-cap-banner {
+  color:var(--danger);
+  border:1px solid #e2574c66;
+  border-radius:5px;
+  padding:5px 8px;
+  white-space:nowrap
+}
+.missed-row {
+  display:flex;
+  align-items:center;
+  gap:6px
+}
+.missed-open,.alert-open {
+  flex:1;
+  min-width:0;
+  border:0;
+  background:transparent;
+  padding:0;
+  justify-content:flex-start;
+  text-align:left
+}
+.missed-open .truncate {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  min-width:0
+}
+.missed-open>small {
+  margin-left:auto
+}
+.ai-summary {
+  display:block;
+  color:var(--text-muted);
+  font-size:11px;
+  font-weight:400;
+  margin-top:4px;
+  white-space:normal
+}
+.vote-actions {
+  display:flex;
+  gap:3px;
+  flex-shrink:0
+}
+.vote-actions button {
+  padding:5px;
+  border:0;
+  background:transparent;
+  font-size:13px
+}
+.item-row {
+  display:flex;
+  align-items:center;
+  gap:12px
+}
+.alert-open {
+  display:flex;
+  align-items:center;
+  gap:14px
+}
+.alert-open>span:nth-child(2) {
+  display:flex;
+  flex-direction:column;
+  min-width:0
+}
+.alert-open>span:last-child {
+  margin-left:auto;
+  white-space:nowrap
+}
+.ai-stats progress {
+  width:100%;
+  height:12px;
+  accent-color:var(--accent)
+}
