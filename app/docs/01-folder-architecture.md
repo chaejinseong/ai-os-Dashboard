@@ -24,6 +24,7 @@ app/
       secrets.rs        Keychain 읽기/쓰기
       store.rs          SQLite 캐시
       sync.rs           주기 동기화
+      ai.rs             Claude 메일 판정·비용 계산
       missed.rs         놓친 업무 규칙 판정
       summary.rs        공통 Item 기반 카드 숫자 계산
   package.json
