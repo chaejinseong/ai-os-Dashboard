@@ -39,6 +39,14 @@ pub fn summarize(
     period_days: u32,
 ) -> Summary {
     let today = now.date_naive();
+    let today_start = today
+        .and_hms_opt(0, 0, 0)
+        .and_then(|time| time.and_local_timezone(Local).earliest())
+        .expect("local start of today");
+    let day_after_tomorrow_start = (today + Duration::days(2))
+        .and_hms_opt(0, 0, 0)
+        .and_then(|time| time.and_local_timezone(Local).earliest())
+        .expect("local start of day after tomorrow");
     let start = today - Duration::days(i64::from(period_days.clamp(1, 30)) - 1);
     let sunday = today + Duration::days(i64::from(6 - today.weekday().num_days_from_monday()));
     let in_period = |item: &Item| {
@@ -74,8 +82,9 @@ pub fn summarize(
             _ => {}
         }
         if i.kind == ItemKind::Event {
-            let day = i.timestamp.with_timezone(&Local).date_naive();
-            if day == today || day == today + Duration::days(1) {
+            let start = i.timestamp.with_timezone(&Local);
+            let end = i.due.unwrap_or(i.timestamp).with_timezone(&Local);
+            if start < day_after_tomorrow_start && end > today_start {
                 s.schedule.push(i.clone());
             }
         }
@@ -163,7 +172,7 @@ mod tests {
     #[test]
     fn schedule_local_dates_sorted() {
         let now = local(7, 12, 0);
-        let items = [
+        let mut items = [
             fixture(
                 "tomorrow",
                 ItemKind::Event,
@@ -172,6 +181,7 @@ mod tests {
             fixture("today", ItemKind::Event, local(7, 0, 0).with_timezone(&Utc)),
             fixture("later", ItemKind::Event, local(9, 0, 0).with_timezone(&Utc)),
         ];
+        items[1].due = Some(local(8, 0, 0).with_timezone(&Utc));
         assert_eq!(
             summarize(&items, &[], now, 7)
                 .schedule
@@ -179,6 +189,29 @@ mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["today", "tomorrow"]
+        );
+    }
+    #[test]
+    fn schedule_includes_overlapping_events_only() {
+        let now = local(7, 12, 0);
+        let event = |id: &str, start: DateTime<Local>, end: DateTime<Local>| {
+            let mut item = fixture(id, ItemKind::Event, start.with_timezone(&Utc));
+            item.due = Some(end.with_timezone(&Utc));
+            item
+        };
+        let items = [
+            event("spanning", local(6, 12, 0), local(8, 18, 0)),
+            event("ended", local(6, 10, 0), local(6, 20, 0)),
+            event("later", local(9, 0, 0), local(9, 12, 0)),
+            event("all-day", local(7, 0, 0), local(8, 0, 0)),
+        ];
+        assert_eq!(
+            summarize(&items, &[], now, 7)
+                .schedule
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["spanning", "all-day"]
         );
     }
 }

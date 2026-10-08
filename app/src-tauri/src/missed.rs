@@ -67,9 +67,11 @@ fn unanswered_invitation(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> 
     {
         return None;
     }
-    let since = DateTime::parse_from_rfc3339(item.meta.get("created")?.as_str()?)
-        .ok()?
-        .with_timezone(&Utc);
+    let since = item.meta["created"]
+        .as_str()
+        .and_then(|created| DateTime::parse_from_rfc3339(created).ok())
+        .map(|created| created.with_timezone(&Utc))
+        .unwrap_or(now);
     Some(MissedItem {
         item: item.clone(),
         reason: "초대에 응답 안 함".into(),
@@ -196,6 +198,28 @@ mod tests {
         assert_eq!(got[0].item.id, "future");
         assert_eq!(got[0].since, created);
         assert_eq!(got[0].reason, "초대에 응답 안 함");
+    }
+    #[test]
+    fn invitation_without_valid_created_uses_now() {
+        let now = Utc::now();
+        let mut future = fixture("future", ItemKind::Event, now + Duration::hours(1));
+        future.meta = serde_json::json!({"my_response":"needsAction"});
+        let rules = Rules {
+            mail_unanswered_days: 2,
+            github_review_days: 1,
+        };
+        let got = missed(
+            std::slice::from_ref(&future),
+            now,
+            &rules,
+            &Context::default(),
+        );
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].since, now);
+        future.meta["created"] = "invalid".into();
+        let got = missed(&[future], now, &rules, &Context::default());
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].since, now);
     }
     #[test]
     fn overdue_incomplete_tasks_are_missed() {

@@ -232,8 +232,8 @@ pub fn mapping_from_source(
             };
             if let (Some(stage), Some(ids)) = (stage, group["option_ids"].as_array()) {
                 for id in ids {
-                    if let Some(name) = id.as_str().and_then(|id| names_by_id.get(id)) {
-                        stages.insert((*name).to_owned(), stage.clone());
+                    if let Some(id) = id.as_str().filter(|id| names_by_id.contains_key(*id)) {
+                        stages.insert(id.to_owned(), stage.clone());
                     }
                 }
             }
@@ -244,11 +244,12 @@ pub fn mapping_from_source(
         ("진행 중", Stage::InProgress),
         ("완료", Stage::Done),
     ] {
-        if options
-            .iter()
-            .any(|option| option["name"].as_str() == Some(name))
-        {
-            stages.entry(name.to_owned()).or_insert(stage);
+        if let Some(id) = options.iter().find_map(|option| {
+            (option["name"].as_str() == Some(name))
+                .then(|| option["id"].as_str())
+                .flatten()
+        }) {
+            stages.entry(id.to_owned()).or_insert(stage);
         }
     }
     Ok(Mapping {
@@ -285,9 +286,12 @@ pub fn page_to_item(json: &Value, mapping: &Mapping) -> Option<Item> {
                 .collect::<String>()
         })
         .unwrap_or_default();
-    let status_name = properties[&mapping.status]["status"]["name"].as_str();
-    let stage = status_name
-        .and_then(|name| mapping.stages.get(name))
+    let status_value = &properties[&mapping.status]["status"];
+    let status_name = status_value["name"].as_str();
+    let stage = status_value["id"]
+        .as_str()
+        .and_then(|id| mapping.stages.get(id))
+        .or_else(|| status_name.and_then(|name| mapping.stages.get(name)))
         .cloned();
     let due = properties[&mapping.due]["date"]["start"]
         .as_str()
@@ -329,9 +333,15 @@ mod tests {
         mapping_from_source(source, "db".into(), "ds".into()).unwrap()
     }
     fn page(status: &str, due: Value) -> Value {
+        let id = match status {
+            "시작 전" => "a",
+            "진행 중" => "b",
+            "완료" => "c",
+            _ => "unknown",
+        };
         json!({"id":"page", "url":"https://notion.so/page", "last_edited_time":"2026-10-07T01:00:00Z",
             "properties":{"제목":{"title":[]}, "마감일":{"date":due},
-                "진행 상태":{"status":{"name":status}}}})
+                "진행 상태":{"status":{"id":id,"name":status}}}})
     }
     #[test]
     fn mapping_uses_named_properties_and_groups() {
@@ -340,16 +350,16 @@ mod tests {
             (m.title.as_str(), m.due.as_str(), m.status.as_str()),
             ("제목", "마감일", "진행 상태")
         );
-        assert_eq!(m.stages.get("시작 전"), Some(&Stage::Requested));
-        assert_eq!(m.stages.get("진행 중"), Some(&Stage::InProgress));
-        assert_eq!(m.stages.get("완료"), Some(&Stage::Done));
+        assert_eq!(m.stages.get("a"), Some(&Stage::Requested));
+        assert_eq!(m.stages.get("b"), Some(&Stage::InProgress));
+        assert_eq!(m.stages.get("c"), Some(&Stage::Done));
     }
     #[test]
     fn mapping_falls_back_to_option_names_and_requires_date() {
         let mut data = source();
         data["properties"]["진행 상태"]["status"]["groups"] = json!([]);
         let m = mapping(&data);
-        assert_eq!(m.stages.get("완료"), Some(&Stage::Done));
+        assert_eq!(m.stages.get("c"), Some(&Stage::Done));
         data["properties"].as_object_mut().unwrap().remove("마감일");
         assert!(mapping_from_source(&data, "db".into(), "ds".into()).is_err());
     }
@@ -379,6 +389,23 @@ mod tests {
         let done = page_to_item(&page("완료", Value::Null), &m).unwrap();
         assert_eq!(done.stage, Some(Stage::Done));
         assert!(done.done);
+    }
+    #[test]
+    fn option_id_survives_rename_and_old_name_mapping_still_works() {
+        let mapping = mapping(&source());
+        let mut renamed = page("진행 중", Value::Null);
+        renamed["properties"]["진행 상태"]["status"]["name"] = "Working".into();
+        assert_eq!(
+            page_to_item(&renamed, &mapping).unwrap().stage,
+            Some(Stage::InProgress)
+        );
+        let mut old_mapping = mapping;
+        old_mapping.stages = HashMap::from([("진행 중".into(), Stage::InProgress)]);
+        let original = page("진행 중", Value::Null);
+        assert_eq!(
+            page_to_item(&original, &old_mapping).unwrap().stage,
+            Some(Stage::InProgress)
+        );
     }
     #[test]
     fn database_url_and_ids() {
