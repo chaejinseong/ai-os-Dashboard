@@ -69,6 +69,7 @@ export interface Stats {
     cap_usd: number;
     feedback_14d: { up: number; down: number; ratio: number };
     key_last4: string | null;
+    cap_reached: boolean;
 }
 export const api = {
     dashboard: (periodDays: number) => invoke<Dashboard>('get_dashboard', { periodDays }),

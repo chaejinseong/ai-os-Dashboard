@@ -1,4 +1,5 @@
 use crate::{
+    ai,
     connectors::github::GitHub,
     connectors::notion::Notion,
     missed::{self, Context, MissedItem, Rules},
@@ -315,10 +316,14 @@ pub struct StatsResponse {
     #[serde(flatten)]
     stats: Stats,
     key_last4: Option<String>,
+    cap_reached: bool,
 }
 #[tauri::command]
 pub fn get_stats(state: State<'_, Arc<AppState>>) -> Result<StatsResponse, String> {
-    let stats = state.store()?.stats(chrono::Local::now())?;
+    let (stats, settings) = {
+        let store = state.store()?;
+        (store.stats(chrono::Local::now())?, store.settings()?)
+    };
     let key_last4 = secrets::get("anthropic.api_key")?.map(|key| {
         key.chars()
             .rev()
@@ -328,7 +333,33 @@ pub fn get_stats(state: State<'_, Arc<AppState>>) -> Result<StatsResponse, Strin
             .rev()
             .collect()
     });
-    Ok(StatsResponse { stats, key_last4 })
+    let cap_reached = cap_reached(stats.month_cost_usd, &settings);
+    Ok(StatsResponse {
+        stats,
+        key_last4,
+        cap_reached,
+    })
+}
+fn cap_reached(spent: f64, settings: &Settings) -> bool {
+    let empty_mail = Item {
+        id: String::new(),
+        source: "gmail".into(),
+        kind: ItemKind::Email,
+        title: String::new(),
+        subtitle: None,
+        url: String::new(),
+        timestamp: chrono::Utc::now(),
+        due: None,
+        done: false,
+        stage: None,
+        meta: serde_json::json!({"snippet":""}),
+    };
+    let worst = ai::worst_case_cost(
+        &ai::request_body(&settings.ai_model, &empty_mail),
+        settings.ai_price_in_per_mtok,
+        settings.ai_price_out_per_mtok,
+    );
+    !ai::fits_cap(spent, 0.0, worst, settings.ai_monthly_cap_usd)
 }
 
 #[cfg(test)]
@@ -404,5 +435,14 @@ mod tests {
         email.stage = None;
         apply_ai_stages(std::slice::from_mut(&mut email), &context);
         assert!(email.stage.is_none());
+    }
+    #[test]
+    fn cap_reached_when_minimal_request_will_not_fit() {
+        let mut settings = Settings::default();
+        assert!(!cap_reached(0.0, &settings));
+        settings.ai_monthly_cap_usd = 0.0;
+        assert!(cap_reached(0.0, &settings));
+        settings.ai_monthly_cap_usd = 5.0;
+        assert!(cap_reached(5.0, &settings));
     }
 }

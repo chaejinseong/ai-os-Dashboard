@@ -17,6 +17,15 @@ pub struct ResultWithUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
 }
+#[derive(Debug, thiserror::Error)]
+pub enum JudgeError {
+    #[error("AI 요청 실패 ({0})")]
+    Status(u16),
+    #[error("AI 네트워크 또는 응답 오류")]
+    Network,
+}
+
+pub const INPUT_OVERHEAD_TOKENS: u64 = 64;
 
 pub fn request_body(model: &str, item: &Item) -> Value {
     let snippet: String = item.meta["snippet"]
@@ -88,8 +97,18 @@ pub fn parse_response(value: &Value) -> ResultWithUsage {
 pub fn cost_usd(input_tokens: u64, output_tokens: u64, price_in: f64, price_out: f64) -> f64 {
     ((input_tokens as f64) * price_in + (output_tokens as f64) * price_out) / 1_000_000.0
 }
-pub fn under_cap(current_cost: f64, cap: f64) -> bool {
-    current_cost < cap
+pub fn worst_case_cost(body: &Value, price_in: f64, price_out: f64) -> f64 {
+    let input = body["system"].as_str().unwrap_or_default().len() as u64
+        + body["messages"][0]["content"]
+            .as_str()
+            .unwrap_or_default()
+            .len() as u64
+        + INPUT_OVERHEAD_TOKENS;
+    let output = body["max_tokens"].as_u64().unwrap_or(0);
+    cost_usd(input, output, price_in, price_out)
+}
+pub fn fits_cap(spent: f64, reserved: f64, worst: f64, cap: f64) -> bool {
+    spent + reserved + worst <= cap
 }
 
 pub fn month_start_utc(now: DateTime<Local>) -> DateTime<Utc> {
@@ -105,19 +124,20 @@ pub async fn judge(
     key: &str,
     model: &str,
     item: &Item,
-) -> Result<ResultWithUsage, String> {
-    let request = build_request(client, API, key, &request_body(model, item))?;
+) -> Result<ResultWithUsage, JudgeError> {
+    let request = build_request(client, API, key, &request_body(model, item))
+        .map_err(|_| JudgeError::Network)?;
     let response = client
         .execute(request)
         .await
-        .map_err(|_| "AI 네트워크 연결 실패".to_string())?;
+        .map_err(|_| JudgeError::Network)?;
     if !response.status().is_success() {
-        return Err(format!("AI 요청 실패 ({})", response.status().as_u16()));
+        return Err(JudgeError::Status(response.status().as_u16()));
     }
     let value = response
         .json::<Value>()
         .await
-        .map_err(|_| "AI 응답 형식 오류".to_string())?;
+        .map_err(|_| JudgeError::Network)?;
     Ok(parse_response(&value))
 }
 
@@ -184,8 +204,23 @@ mod tests {
         assert_eq!(start.with_timezone(&Local).date_naive().day(), 1);
         assert_eq!(start.with_timezone(&Local).hour(), 0);
         assert!(now.with_timezone(&Utc) - start >= Duration::days(7));
-        assert!(under_cap(4.99, 5.0));
-        assert!(!under_cap(5.0, 5.0));
-        assert!(!under_cap(0.0, 0.0));
+    }
+    #[test]
+    fn worst_case_uses_utf8_bytes_and_cap_boundary() {
+        let mut item = fixture("", ItemKind::Email, Utc::now());
+        item.meta["snippet"] = "가나".into();
+        let body = request_body("test", &item);
+        let system_bytes = body["system"].as_str().unwrap().len() as u64;
+        let content = body["messages"][0]["content"].as_str().unwrap();
+        assert!(content.ends_with("가나"));
+        let content_bytes = content.len() as u64;
+        assert_eq!(
+            content_bytes - content.trim_end_matches("가나").len() as u64,
+            6
+        );
+        let expected = cost_usd(system_bytes + content_bytes + 64, 150, 1.0, 5.0);
+        assert!((worst_case_cost(&body, 1.0, 5.0) - expected).abs() < f64::EPSILON);
+        assert!(fits_cap(0.25, 0.25, 0.5, 1.0));
+        assert!(!fits_cap(0.25, 0.25, 0.5 + 1e-12, 1.0));
     }
 }
