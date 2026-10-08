@@ -1,6 +1,6 @@
 # m3-inflight-cost-cap
 
-- Status: open
+- Status: done
 - Created: 2026-10-08
 - Owner: unassigned
 - Related spec (if any): app/docs/specs/261006-1730-04-m3-ai-judgment.md
@@ -11,10 +11,10 @@ M3는 메일 후보를 최대 2건 동시에 판정하고 각 완료 후 월 누
 
 ## What's left
 
-- [ ] 실제 사용량을 보고 상한을 엄격히 지켜야 하는지 결정한다. 필요하면 동시성·예상 비용 예약·응답 후 취소 중 한 방식을 스펙으로 정한다.
+- [x] 사람 승인으로 요청별 최대 비용 예약 방식을 선택하고 구현했다.
 
 ## Notes
 
-스펙 초안: app/docs/specs/261008-1420-01-m3-strict-cost-cap.md (Draft, 승인 대기).
+구현 스펙: app/docs/specs/261008-1420-01-m3-strict-cost-cap.md (Implemented). 보고서: app/docs/reports/261008-1429-01-m3-strict-cost-cap.md.
 
-현재 구현은 승인된 M3 스펙의 동시 2건과 매 완료 후 재확인 절차를 따른다. 테스트·개발 중 실제 Anthropic API 요청은 하지 않았다.
+현재 구현은 동시 2건을 유지하며 요청 전에 최대 비용을 예약한다. 테스트·개발 중 실제 Anthropic API 요청은 하지 않았다.

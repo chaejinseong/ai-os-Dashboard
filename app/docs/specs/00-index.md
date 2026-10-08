@@ -14,7 +14,7 @@ Status flow: `Draft` → `Approved` (human only) → `Implemented`
 | 261006-1730-02-m2b-notion.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M2b: 프로젝트 플래너 작업, 마감 지남 판정 |
 | 261006-1730-03-m2c-github.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M2c: 리뷰 요청·내 PR·할당 이슈 |
 | 261006-1730-04-m3-ai-judgment.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M3: Claude 메일 판정, 👍/👎, 비용 상한 |
-| 261008-1420-01-m3-strict-cost-cap.md | Approved | codex | planning/docs/prd/ai-os-dashboard.md | M3 후속: 요청별 최대 비용 예약으로 월 상한 엄수 |
+| 261008-1420-01-m3-strict-cost-cap.md | Implemented | codex | planning/docs/prd/ai-os-dashboard.md | M3 후속: 요청별 최대 비용 예약으로 월 상한 엄수 |
 
 ## How to add a spec
 

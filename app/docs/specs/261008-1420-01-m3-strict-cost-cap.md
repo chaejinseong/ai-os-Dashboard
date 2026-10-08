@@ -1,12 +1,12 @@
 # m3-strict-cost-cap
 
-- Status: Approved (chaejinseong, 2026-10-08)
+- Status: Implemented (2026-10-08)
 - Created: 2026-10-08
 - Author: claude (Pam)
 - Implementer: codex
 - Source PRD: planning/docs/prd/ai-os-dashboard.md (M3, G5) — todo app/docs/todo/261008-1415-01-m3-inflight-cost-cap.md
 - Depends on: app/docs/specs/261006-1730-04-m3-ai-judgment.md (Reviewed)
-- Reports: app/docs/reports/<file>.md (filled in by the implementer)
+- Reports: app/docs/reports/261008-1429-01-m3-strict-cost-cap.md
 
 > Only the human sets `Approved`. Once approved, the implementer builds
 > this without asking for plan approval again — so write it so nobody
@@ -107,7 +107,7 @@ Settings 화면의 비용 막대는 그대로 둔다.
 
 명령은 `app/`에서 실행한다. 테스트는 실제 Anthropic API를 부르지 않는다 (`judge`는 가짜 클로저).
 
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 추가 테스트:
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 추가 테스트:
   - `ai::tests`: `worst_case_cost`가 (system 바이트 + content 바이트 + 64)·가격in +
     150·가격out을 1e6으로 나눈 값과 같다; 한국어 snippet은 글자당 3바이트로 센다.
     `fits_cap`의 경계 (`spent + reserved + worst == cap` → true, 1e-12 초과 → false).
@@ -121,9 +121,9 @@ Settings 화면의 비용 막대는 그대로 둔다.
   - `sync::tests::network_error_keeps_reservation`: 가짜 judge가 첫 건에 네트워크 오류 →
     두 번째 후보는 `cap = 1.5 × W`에서 판정되지 않는다.
   - `commands::tests`: `cap_reached`가 남은 여유 < 빈 요청 최대 비용일 때 true.
-- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
-- [ ] `npm run build` 성공
-- [ ] `grep -rn "under_cap" src-tauri/src` 결과 없음
+- [x] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
+- [x] `npm run build` 성공
+- [x] `grep -rn "under_cap" src-tauri/src` 결과 없음
 - [ ] 수동 확인 (키 필요, 사람): 설정에서 상한을 $0.0001로 낮추고 동기화 → AI 요청이
   나가지 않고(설정의 이번 달 비용 변화 없음) 상단 바에 "AI 판정 중지 (월 상한)",
   MISSED 메일에 "(AI 판정 없음)"이 뜬다.
