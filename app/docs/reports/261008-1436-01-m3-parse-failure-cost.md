@@ -41,7 +41,12 @@ Anthropic 200 응답 본문을 해석할 수 없어도 읽을 수 있는 사용�
 
 ## Review
 
-- Pending Claude review.
+- Reviewer: claude (Pam), 2026-10-08, round 1
+- Result: must-fix 0, suggestion 1. 스펙 없음(리뷰 제안 후속)이라 상태 변경 대상 없음.
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests` 42 passed (oauth loopback 2개는 샌드박스 바인드 제한, god 호스트 실행 44 passed 근거).
+- 보고서 ↔ 코드 일치: df71677 diff와 맞다. `parse_api_response`는 본문이 JSON이 아니거나 `content[0].text`가 없을 때만 `Response`를 돌려주고, 텍스트는 있는데 모델 답이 JSON이 아닌 경우는 기존 M3대로 `needs_action = true`로 판정·저장된다(동작 유지). `Response(usage)`는 사용량이 있으면 실제 가격, 없으면 예약 최대 비용으로 `spent`에 더하고 `record_usage`로 `ai_usage`에 남긴다 → 다음 동기화의 월 누적에도 반영. 판정은 저장하지 않는다. 스키마 변경 없음. 새 테스트 4개는 가짜 judge·메모리 DB만 쓴다(실제 API 없음).
+
+1. `suggestion` — 판정이 저장되지 않으므로 같은 메일은 다음 동기화마다 다시 요청된다. 응답 형식이 계속 깨지는 상황(API 형식 변경 등)이면 상한까지 매번 비용이 쌓인다. 상한은 지켜지므로 차단 아님. 필요하면 같은 `(thread_id, last_message_id)`의 파싱 실패 횟수를 세어 건너뛰는 방식을 검토한다.
 
 ## Follow-ups
 
