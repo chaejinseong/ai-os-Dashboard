@@ -9,7 +9,7 @@ deleted, or archived.
 | _(example) 260219-1956-01-signup-access-control.md_ | open | Finish access control rules for signup flow |
 | 261006-1535-01-google-cloud-setup.md | open | Gmail OAuth 클라이언트 만들기 (사람이 직접) |
 | 261006-1730-01-notion-github-setup.md | open | Notion 통합·GitHub 토큰·Anthropic 키 준비 (사람이 직접) |
-| 261007-0931-01-google-disconnect-scope.md | open | M2 전 Google 연결 해제 대상을 Google 소스로 제한 |
+| 261008-1045-01-m2b-spec-file-scope.md | blocked | M2b 명령 등록·매핑 저장에 필요한 파일 범위 보완 |
 
 ## How to add an item
 
