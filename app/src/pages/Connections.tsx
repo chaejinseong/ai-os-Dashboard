@@ -10,7 +10,10 @@ export default function Connections({ statuses, onChange }: {
   const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notionToken, setNotionToken] = useState('');
+  const [notionDatabase, setNotionDatabase] = useState('');
   const googleSources = ['gmail', 'calendar'].map(source => statuses.find(s => s.source === source));
+  const notion = statuses.find(status => status.source === 'notion');
   const connected = googleSources.some(s => s?.connected);
   const hasError = googleSources.some(s => s?.error);
 
@@ -67,9 +70,37 @@ export default function Connections({ statuses, onChange }: {
       {busy && <p className="muted">로그인은 브라우저에서 진행하며 최대 5분 기다립니다.</p>}
     </section>
     <div className="card-grid placeholders">
-      {['Notion', 'GitHub'].map(name => <section className="card" key={name}>
-        <h2>{name}</h2><p className="empty">준비 중</p>
-      </section>)}
+      <section className="card connection-card">
+        <h2>NOTION <span className={`dot ${notion?.error ? 'error' : notion?.connected ? 'live' : ''}`} /></h2>
+        <p>프로젝트 플래너 · 읽기 전용 연결</p>
+        {!notion?.connected && <form onSubmit={event => {
+          event.preventDefault();
+          void run(async () => {
+            await api.saveNotion(notionToken, notionDatabase);
+            setNotionToken('');
+            setNotionDatabase('');
+          });
+        }}>
+          <label>내부 통합 토큰
+            <input type="password" autoComplete="off" value={notionToken}
+              onChange={event => setNotionToken(event.target.value)} required disabled={busy} />
+          </label>
+          <label>데이터베이스 URL 또는 ID
+            <input autoComplete="off" value={notionDatabase}
+              onChange={event => setNotionDatabase(event.target.value)} required disabled={busy} />
+          </label>
+          <button disabled={busy || !notionToken.trim() || !notionDatabase.trim()}>Notion 연결</button>
+        </form>}
+        <div className="connection-details">
+          <div>상태 <span>{notion?.syncing ? '동기화 중' : notion?.connected ? '연결됨' : '연결 안 됨'}</span></div>
+          <div>마지막 동기화 <span>{notion?.last_synced ? new Date(notion.last_synced).toLocaleString('ko-KR') : '아직 없음'}</span></div>
+        </div>
+        {notion?.error && <p className="danger">{notion.error}</p>}
+        {notion?.connected && <div className="actions">
+          <button disabled={busy} onClick={() => void run(api.disconnectNotion)}>연결 해제</button>
+        </div>}
+      </section>
+      <section className="card"><h2>GitHub</h2><p className="empty">준비 중</p></section>
     </div>
   </>;
 }

@@ -18,10 +18,11 @@ pub fn run() {
             std::fs::create_dir_all(&directory)?;
             let store = store::Store::open(&directory.join("cache.sqlite"))
                 .map_err(std::io::Error::other)?;
+            let store = Arc::new(Mutex::new(store));
             let auth = Arc::new(oauth::GoogleAuth::default());
             let state = Arc::new(sync::AppState {
-                store: Mutex::new(store),
-                registry: connectors::registry(auth.clone()),
+                store: store.clone(),
+                registry: connectors::registry(auth.clone(), store),
                 auth,
                 operation: tokio::sync::Mutex::new(()),
             });
@@ -37,6 +38,8 @@ pub fn run() {
             commands::disconnect_google,
             commands::save_google_client,
             commands::has_google_client,
+            commands::save_notion,
+            commands::disconnect_notion,
             commands::get_settings,
             commands::save_settings
         ])

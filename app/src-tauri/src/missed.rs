@@ -37,10 +37,25 @@ fn unanswered_invitation(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> 
         since,
     })
 }
+fn overdue_task(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
+    let due = item.due?;
+    if item.kind != ItemKind::Task || item.done || due >= now {
+        return None;
+    }
+    Some(MissedItem {
+        item: item.clone(),
+        reason: format!("마감 {}일 지남", (now - due).num_days()),
+        since: due,
+    })
+}
 pub fn missed(items: &[Item], now: DateTime<Utc>, rules: &Rules) -> Vec<MissedItem> {
     let mut result: Vec<_> = items
         .iter()
-        .filter_map(|i| unanswered(i, now, rules).or_else(|| unanswered_invitation(i, now)))
+        .filter_map(|i| {
+            unanswered(i, now, rules)
+                .or_else(|| unanswered_invitation(i, now))
+                .or_else(|| overdue_task(i, now))
+        })
         .collect();
     result.sort_by_key(|i| i.since);
     result
@@ -91,5 +106,27 @@ mod tests {
         assert_eq!(got[0].item.id, "future");
         assert_eq!(got[0].since, created);
         assert_eq!(got[0].reason, "초대에 응답 안 함");
+    }
+    #[test]
+    fn overdue_incomplete_tasks_are_missed() {
+        let now = Utc::now();
+        let mut overdue = fixture("overdue", ItemKind::Task, now);
+        overdue.due = Some(now - Duration::days(2));
+        let mut done = overdue.clone();
+        done.done = true;
+        let mut no_due = overdue.clone();
+        no_due.due = None;
+        let mut upcoming = overdue.clone();
+        upcoming.due = Some(now + Duration::seconds(1));
+        let got = missed(
+            &[done, no_due, upcoming, overdue],
+            now,
+            &Rules {
+                mail_unanswered_days: 2,
+            },
+        );
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].reason, "마감 2일 지남");
+        assert_eq!(got[0].since, now - Duration::days(2));
     }
 }

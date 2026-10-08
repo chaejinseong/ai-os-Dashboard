@@ -63,6 +63,8 @@ export const api = {
     sync: () => invoke<void>('sync_now'), connect: () => invoke<void>('connect_google'), disconnect: () => invoke<void>('disconnect_google'),
     saveClient: (clientId: string, clientSecret: string) => invoke<void>('save_google_client', { clientId, clientSecret }),
     hasClient: () => invoke<boolean>('has_google_client'), settings: () => invoke<Settings>('get_settings'), saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
+    saveNotion: (token: string, database: string) => invoke<void>('save_notion', { token, database }),
+    disconnectNotion: () => invoke<void>('disconnect_notion'),
     onUpdate: (handler: () => void) => listen('dashboard-updated', handler),
 };
 export async function openItem(item: Item) { try {

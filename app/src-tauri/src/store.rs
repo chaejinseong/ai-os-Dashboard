@@ -64,6 +64,32 @@ impl Store {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+    pub fn notion_mapping(&self) -> Result<Option<String>, String> {
+        match self.conn.query_row(
+            "SELECT value FROM settings WHERE key='notion.mapping'",
+            [],
+            |row| row.get(0),
+        ) {
+            Ok(value) => Ok(Some(value)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+    pub fn save_notion_mapping(&self, mapping: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO settings(key,value) VALUES('notion.mapping',?1)",
+                [mapping],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    pub fn clear_notion_mapping(&self) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key='notion.mapping'", [])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
     pub fn settings(&self) -> Result<Settings, String> {
         let read = |key| {
             self.conn
@@ -119,5 +145,19 @@ mod tests {
         s.replace_items("test", &[]).unwrap();
         assert_eq!(s.items().unwrap()[0].source, "other");
         assert_eq!(s.settings().unwrap().sync_minutes, 15);
+    }
+    #[test]
+    fn notion_mapping_round_trip() {
+        let store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        assert!(store.notion_mapping().unwrap().is_none());
+        store
+            .save_notion_mapping("{\"data_source_id\":\"ds\"}")
+            .unwrap();
+        assert_eq!(
+            store.notion_mapping().unwrap().as_deref(),
+            Some("{\"data_source_id\":\"ds\"}")
+        );
+        store.clear_notion_mapping().unwrap();
+        assert!(store.notion_mapping().unwrap().is_none());
     }
 }

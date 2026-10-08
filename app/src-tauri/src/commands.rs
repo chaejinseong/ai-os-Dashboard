@@ -1,4 +1,5 @@
 use crate::{
+    connectors::notion::Notion,
     missed::{self, MissedItem, Rules},
     model::{Item, ItemKind, Settings, SourceStatus},
     secrets,
@@ -135,6 +136,45 @@ pub async fn save_google_client(
 pub fn has_google_client() -> Result<bool, String> {
     Ok(secrets::get("google.client_id")?.is_some()
         && secrets::get("google.client_secret")?.is_some())
+}
+#[tauri::command]
+pub async fn save_notion(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+    token: String,
+    database: String,
+) -> Result<(), String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("Notion 토큰을 입력하세요".into());
+    }
+    let _guard = state.operation.lock().await;
+    let mapping = Notion::validate_and_map(token, &database).await?;
+    let mapping_json = serde_json::to_string(&mapping).map_err(|_| "Notion 매핑 형식 오류")?;
+    secrets::set("notion.token", token)?;
+    if let Err(error) = state.store()?.save_notion_mapping(&mapping_json) {
+        let _ = secrets::delete("notion.token");
+        return Err(error);
+    }
+    drop(_guard);
+    state.sync(&app).await
+}
+#[tauri::command]
+pub async fn disconnect_notion(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let _guard = state.operation.lock().await;
+    secrets::delete("notion.token")?;
+    let mut store = state.store()?;
+    store.clear_notion_mapping()?;
+    store.replace_items("notion", &[])?;
+    store.save_status(&SourceStatus {
+        source: "notion".into(),
+        ..Default::default()
+    })?;
+    AppState::notify(&app);
+    Ok(())
 }
 #[tauri::command]
 pub fn get_settings(state: State<'_, Arc<AppState>>) -> Result<Settings, String> {

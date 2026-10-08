@@ -1,7 +1,8 @@
 pub mod gmail;
 pub mod google_calendar;
-use crate::{model::Item, oauth::GoogleAuth};
-use std::sync::Arc;
+pub mod notion;
+use crate::{model::Item, oauth::GoogleAuth, store::Store};
+use std::sync::{Arc, Mutex};
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectorError {
     #[error("{0}")]
@@ -20,9 +21,10 @@ pub trait Connector: Send + Sync {
     async fn fetch(&self) -> Result<Vec<Item>, ConnectorError>;
 }
 pub type Registry = Vec<Arc<dyn Connector>>;
-pub fn registry(auth: Arc<GoogleAuth>) -> Registry {
+pub fn registry(auth: Arc<GoogleAuth>, store: Arc<Mutex<Store>>) -> Registry {
     vec![
         Arc::new(gmail::Gmail::new(auth.clone())),
         Arc::new(google_calendar::GoogleCalendar::new(auth)),
+        Arc::new(notion::Notion::new(store)),
     ]
 }

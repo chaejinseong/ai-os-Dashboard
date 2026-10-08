@@ -2,7 +2,7 @@ use crate::{connectors::Registry, model::SourceStatus, oauth::GoogleAuth, store:
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 pub struct AppState {
-    pub store: Mutex<Store>,
+    pub store: Arc<Mutex<Store>>,
     pub registry: Registry,
     pub auth: Arc<GoogleAuth>,
     pub operation: tokio::sync::Mutex<()>,
