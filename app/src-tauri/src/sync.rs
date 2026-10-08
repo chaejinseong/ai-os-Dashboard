@@ -157,6 +157,11 @@ fn pending_mail_candidates(
     }
     Ok(pending)
 }
+fn warn_if_over_cap(spent: f64, reserved: f64, cap: f64) {
+    if spent + reserved > cap {
+        eprintln!("AI 비용 상한 초과 가능: 반올림 또는 실제 비용이 예약 추정치를 넘음");
+    }
+}
 async fn run_capped<J, F, D>(
     pending: Vec<Item>,
     mut spent: f64,
@@ -188,7 +193,7 @@ where
             }
             let item = remaining.next().expect("peeked candidate");
             reserved += worst;
-            debug_assert!(spent + reserved <= settings.ai_monthly_cap_usd);
+            warn_if_over_cap(spent, reserved, settings.ai_monthly_cap_usd);
             let task = judge(item);
             let handle = tasks.spawn(async move {
                 let (item, result) = task.await;
@@ -250,9 +255,7 @@ where
                 eprintln!("AI 판정 작업 중단");
             }
         }
-        if spent + reserved > settings.ai_monthly_cap_usd {
-            eprintln!("AI 비용 상한 초과: 실제 사용량이 예약 추정치를 넘음");
-        }
+        warn_if_over_cap(spent, reserved, settings.ai_monthly_cap_usd);
     }
     Ok(spent)
 }
@@ -575,5 +578,15 @@ mod tests {
         .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert!(spent > settings.ai_monthly_cap_usd);
+    }
+    #[test]
+    fn admission_rounding_boundary_does_not_panic() {
+        let spent = 0.7;
+        let reserved = 0.2;
+        let worst = 0.1;
+        let cap = 0.9999999999999999;
+        assert!(ai::fits_cap(spent, reserved, worst, cap));
+        assert!(spent + (reserved + worst) > cap);
+        warn_if_over_cap(spent, reserved + worst, cap);
     }
 }
