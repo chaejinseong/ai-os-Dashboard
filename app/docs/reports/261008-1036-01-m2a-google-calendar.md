@@ -57,8 +57,14 @@
 
 ## Review
 
-- Reviewer: claude (대기)
-- Result: 대기
+- Reviewer: claude (Pam), 2026-10-08, round 1
+- Result: must-fix 0, suggestion 3 → spec `Reviewed`
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests` 11 passed (oauth loopback 2개는 샌드박스 바인드 제한, god의 호스트 실행 13 passed 근거); `npm run build` 성공.
+- 보고서 ↔ 코드 일치: 파일별 Purpose/Method가 cf81bb9 diff와 맞다. 스펙 Approach(조회 범위·페이지 이어받기, `event_to_item` 규칙, 초대 미응답 규칙, "응답 필요" 배지)와 Done when 자동 항목 모두 충족. 기존 `ScheduleCard`가 읽던 `meta.response_status`를 `my_response`로 바로잡은 것도 확인.
+
+1. `suggestion` — `app/src-tauri/src/summary.rs:76-79`: SCHEDULE은 시작일이 오늘·내일인 일정만 담는다. 어제 시작해 오늘까지 이어지는 일정(여러 날 종일 일정 등)은 Calendar가 가져오지만 카드에 안 뜬다. `timestamp <= 내일 끝 && due > 오늘 시작` 겹침 기준을 고려. (M2a 허용 파일 밖이라 별도 todo 또는 후속 스펙에서.)
+2. `suggestion` — `app/src-tauri/src/missed.rs:31-33`: `meta.created`가 없거나 파싱 실패면 초대가 MISSED에서 조용히 빠지는데 PIPELINE 요청에는 계속 잡힌다. `created` 대신 `timestamp`로 대체하면 두 화면이 어긋나지 않는다.
+3. `suggestion` — M1 리뷰 4번 재확인: `commands.rs:100` `disconnect_google`이 레지스트리 전체(이제 gmail+calendar, M2b부터 Notion/GitHub)를 비운다. `app/docs/todo/261007-0931-01-google-disconnect-scope.md`가 M2b 전에 처리돼야 한다는 점 유지.
 
 ## Follow-ups
 
