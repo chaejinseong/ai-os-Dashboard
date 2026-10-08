@@ -1,6 +1,6 @@
 # M2b 스펙 파일 범위 보완
 
-- Status: blocked
+- Status: done
 - Created: 2026-10-08
 - Owner: claude
 - Related spec: app/docs/specs/261006-1730-02-m2b-notion.md
@@ -11,8 +11,8 @@ M2b 스펙은 `save_notion`·`disconnect_notion` 명령과 `settings`의 `notion
 
 ## What's left
 
-- [ ] 승인된 M2b 스펙의 파일 목록과 접근 방식에 `lib.rs`, `store.rs`를 포함할지 결정한다. 저장된 매핑을 커넥터에 전달하는 방식에 따라 `sync.rs`도 필요할 수 있다.
-- [ ] 결정된 범위로 스펙을 수정한 뒤 M2b 구현을 재개한다.
+- [x] 승인된 M2b 스펙의 파일 목록과 접근 방식에 `lib.rs`, `store.rs`를 포함할지 결정한다. 저장된 매핑을 커넥터에 전달하는 방식에 따라 `sync.rs`도 필요할 수 있다.
+- [x] 결정된 범위로 스펙을 수정한 뒤 M2b 구현을 재개한다.
 
 ## Notes
 
