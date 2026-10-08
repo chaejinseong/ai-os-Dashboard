@@ -1,7 +1,8 @@
 use crate::secrets;
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
+    basic::{BasicClient, BasicErrorResponse},
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
+    RefreshToken, RequestTokenError, Scope, TokenResponse, TokenUrl,
 };
 use std::time::{Duration, Instant};
 use tauri_plugin_opener::OpenerExt;
@@ -54,6 +55,15 @@ fn http() -> Result<reqwest::Client, String> {
         .build()
         .map_err(|_| "HTTP 초기화 실패".into())
 }
+fn refresh_error_message<RE>(error: &RequestTokenError<RE, BasicErrorResponse>) -> &'static str
+where
+    RE: std::error::Error + 'static,
+{
+    match error {
+        RequestTokenError::ServerResponse(_) => "다시 로그인 필요",
+        _ => "Google 연결 실패 — 다음 동기화에 다시 시도",
+    }
+}
 impl GoogleAuth {
     pub fn is_connected(&self) -> bool {
         matches!(secrets::get("google.refresh_token"), Ok(Some(_)))
@@ -76,7 +86,7 @@ impl GoogleAuth {
             .exchange_refresh_token(&RefreshToken::new(refresh))
             .request_async(&http()?)
             .await
-            .map_err(|_| "다시 로그인 필요")?;
+            .map_err(|error| refresh_error_message(&error))?;
         if let Some(refresh) = response.refresh_token() {
             secrets::set("google.refresh_token", refresh.secret())?;
         }
@@ -207,6 +217,7 @@ async fn receive_callback(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oauth2::basic::BasicErrorResponseType;
     use tokio::net::TcpStream;
 
     #[tokio::test]
@@ -246,5 +257,21 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[test]
+    fn refresh_errors_distinguish_rejected_login_from_retryable_failure() {
+        type TestError = RequestTokenError<std::io::Error, BasicErrorResponse>;
+        let rejected = TestError::ServerResponse(BasicErrorResponse::new(
+            BasicErrorResponseType::InvalidGrant,
+            None,
+            None,
+        ));
+        assert_eq!(refresh_error_message(&rejected), "다시 로그인 필요");
+        let retryable = TestError::Other("offline".into());
+        assert_eq!(
+            refresh_error_message(&retryable),
+            "Google 연결 실패 — 다음 동기화에 다시 시도"
+        );
     }
 }

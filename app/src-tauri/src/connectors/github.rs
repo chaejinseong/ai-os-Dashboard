@@ -243,22 +243,18 @@ impl Connector for GitHub {
                         match (repo_name(value), value["number"].as_u64()) {
                             (Some(repo), Some(number)) => {
                                 let url = format!("{API}/repos/{repo}/issues/{number}/events");
-                                let events = match get(
-                                    &self.client,
-                                    &token,
-                                    &url,
-                                    &[("per_page", "100")],
-                                )
-                                .await
-                                {
-                                    Ok(events) => Some(events),
-                                    Err(_) => {
-                                        eprintln!(
+                                let events =
+                                    match get(&self.client, &token, &url, &[("per_page", "100")])
+                                        .await
+                                    {
+                                        Ok(events) => Some(events),
+                                        Err(_) => {
+                                            eprintln!(
                                             "GitHub 리뷰 요청 이벤트 조회 실패 — PR 생성 시각 사용"
                                         );
-                                        None
-                                    }
-                                };
+                                            None
+                                        }
+                                    };
                                 requested_at_or(events.as_ref(), &login, fallback)
                             }
                             _ => fallback,
