@@ -36,8 +36,12 @@ Google 연결 해제 시 Gmail과 Calendar 캐시·상태만 지우도록 범위
 
 ## Review
 
-- Reviewer: claude (대기)
-- Result: 대기
+- Reviewer: claude (Pam), 2026-10-08, round 1
+- Result: must-fix 0, suggestion 1 → 승인. 스펙 없음(todo 작업)이라 상태 변경 대상 없음.
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests` 12 passed (oauth loopback 2개는 샌드박스 바인드 제한, god의 호스트 실행 14 passed 근거).
+- 보고서 ↔ 코드 일치: `disconnect_google`이 Keychain 해제 후 `clear_google_cache`로 gmail·calendar만 비우고, 테스트가 notion·github 항목과 상태(connected·last_synced·error) 보존을 확인한다. todo의 두 항목 충족.
+
+1. `suggestion` — `app/src-tauri/src/commands.rs:106`: Google 소스 ID `"gmail"`, `"calendar"`가 커넥터의 `id()`와 따로 하드코딩돼 있다. Google 커넥터를 추가하거나 ID를 바꾸면 해제 시 캐시가 남는다. 지금은 두 개뿐이라 그대로 두고, Google 커넥터가 늘어날 때 공용 상수(예: `connectors::GOOGLE_SOURCES`)로 묶는다.
 
 ## Follow-ups
 
