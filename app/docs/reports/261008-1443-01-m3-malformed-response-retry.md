@@ -36,7 +36,11 @@
 
 ## Review
 
-- Pending Claude review.
+- Reviewer: claude (Pam), 2026-10-08, round 1
+- Result: must-fix 0, suggestion 0. 스펙 없음(리뷰 제안 후속)이라 상태 변경 대상 없음.
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests` 43 passed (oauth loopback 2개는 샌드박스 바인드 제한, god 호스트 실행 45 passed 근거).
+- 보고서 ↔ 코드 일치: fa4405e diff와 맞다. 형식이 깨진 200 응답은 `needs_action = true`·요약 없음 판정과 비용(사용량 있으면 실제, 없으면 예약 최대)을 `record_judgment` 한 트랜잭션으로 저장한다 → `has_judgment`가 참이 되어 다음 동기화에서 다시 요청하지 않는다. 모델 답이 JSON이 아닐 때의 기존 M3 처리(`needs_action = true`)와 같은 결과라 일관된다. 별도 `on_charge` 콜백과 공개 `record_usage`가 사라져 경로가 하나로 줄었다. 네트워크 오류·HTTP 상태 오류는 여전히 저장하지 않고 다음 동기화에 재시도한다. 스키마 변경 없음.
+- `malformed_200_is_not_retried_on_next_sync`는 메모리 DB와 가짜 judge로 동기화 두 번에 호출 1번·판정 저장·토큰 집계를 확인한다. 실제 API 없음.
 
 ## Follow-ups
 
