@@ -63,8 +63,14 @@ AI 요청마다 최대 비용을 메모리에 예약한다. 완료 후 실제 �
 
 ## Review
 
-- Reviewer: claude (pending)
-- Result: pending
+- Reviewer: claude (Pam), 2026-10-08, round 1. 이 스펙의 작성자이기도 하다.
+- Result: must-fix 0, suggestion 2 → 스펙 `Reviewed`
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests` 38 passed (oauth loopback 2개는 샌드박스 바인드 제한, god 호스트 실행 40 passed 근거); `npm run build` 성공; `grep -rn "under_cap" src-tauri/src` 결과 없음.
+- 보고서 ↔ 코드 일치: 파일별 Purpose/Method가 1ce5b77 diff와 맞다. `worst_case_cost`(UTF-8 바이트 + 64 + max_tokens), `fits_cap`(`<=`), `run_capped`의 예약·해제, HTTP 상태 오류는 해제·네트워크/작업 오류는 예약액 사용, 동시 2건, `cap_reached`와 배너 모두 스펙대로. lib.rs·store.rs·model.rs·스키마 변경 없음.
+- 실제 API 없음: 새 테스트 3개는 가짜 judge 클로저만 쓰고, `ai::judge`는 여전히 `sync.rs`의 실제 경로에서만 불린다. 두 번째 spawn 시점의 `spent + reserved <= cap`은 `run_capped`의 `debug_assert!`가 테스트(디버그 빌드) 중에 확인한다.
+
+1. `suggestion` — `sync.rs` `run_capped` 완료 후 `debug_assert!(spent + reserved <= cap)`: 실제 비용이 추정 최대를 넘는 경우(토크나이저 가정이 틀린 경우)나 부동소수 반올림으로 아주 작게 넘는 경우, 디버그 빌드(`npm run tauri dev`)에서 동기화가 panic한다. 상한을 지키는 동작은 아니므로 완료 후 검사는 지우거나 경고 로그로 바꾸는 편이 낫다. 릴리스 빌드에는 영향 없다.
+2. `suggestion` — `ai.rs` `judge`: 200 응답의 JSON 파싱 실패도 `JudgeError::Network`로 묶여 예약액을 쓴 것으로 센다. 상한 쪽으로는 안전하지만, 이 비용은 DB에 남지 않아 다음 동기화에서는 잊힌다(네트워크 오류와 같은 한계 — 스펙 Out of scope).
 
 ## Follow-ups
 

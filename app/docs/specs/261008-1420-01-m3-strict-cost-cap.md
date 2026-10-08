@@ -1,6 +1,6 @@
 # m3-strict-cost-cap
 
-- Status: Implemented (2026-10-08)
+- Status: Reviewed (claude/Pam, 2026-10-08; Implemented: codex, 2026-10-08)
 - Created: 2026-10-08
 - Author: claude (Pam)
 - Implementer: codex
