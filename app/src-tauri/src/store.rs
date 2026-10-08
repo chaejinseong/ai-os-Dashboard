@@ -273,21 +273,26 @@ impl Store {
             )
             .map_err(|error| error.to_string())?;
         if inserted == 1 {
-            transaction.execute("INSERT INTO ai_usage(model,input_tokens,output_tokens,cost_usd,created_at) VALUES(?1,?2,?3,?4,?5)",
-                params![model, result.input_tokens, result.output_tokens, cost, now.timestamp()])
-                .map_err(|error| error.to_string())?;
+            Self::record_usage(
+                &transaction,
+                model,
+                result.input_tokens,
+                result.output_tokens,
+                cost,
+                now,
+            )?;
         }
         transaction.commit().map_err(|error| error.to_string())
     }
-    pub fn record_usage(
-        &self,
+    fn record_usage(
+        conn: &Connection,
         model: &str,
         input_tokens: u64,
         output_tokens: u64,
         cost: f64,
         now: DateTime<Utc>,
     ) -> Result<(), String> {
-        self.conn
+        conn
             .execute(
                 "INSERT INTO ai_usage(model,input_tokens,output_tokens,cost_usd,created_at) VALUES(?1,?2,?3,?4,?5)",
                 params![model, input_tokens, output_tokens, cost, now.timestamp()],
@@ -458,7 +463,7 @@ mod tests {
     fn usage_without_judgment_is_counted() {
         let store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
         let now = Utc::now();
-        store.record_usage("model", 100, 10, 0.002, now).unwrap();
+        Store::record_usage(&store.conn, "model", 100, 10, 0.002, now).unwrap();
         assert!(!store.has_judgment("thread", "message").unwrap());
         let stats = store.stats(now.with_timezone(&Local)).unwrap();
         assert!((stats.month_cost_usd - 0.002).abs() < 1e-9);

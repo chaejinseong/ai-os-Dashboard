@@ -85,24 +85,8 @@ impl AppState {
     ) -> Result<(), String> {
         let settings = self.store()?.settings()?;
         let now = Utc::now();
-        let mut pending = Vec::new();
-        {
-            let store = self.store()?;
-            for item in items
-                .iter()
-                .filter(|item| mail_candidate(item, now, settings.mail_unanswered_days))
-            {
-                let Some((thread, message)) = item.meta["thread_id"]
-                    .as_str()
-                    .zip(item.meta["last_message_id"].as_str())
-                else {
-                    continue;
-                };
-                if !store.has_judgment(thread, message)? {
-                    pending.push(item.clone());
-                }
-            }
-        }
+        let pending =
+            pending_mail_candidates(&*self.store()?, items, now, settings.mail_unanswered_days)?;
         if pending.is_empty() {
             return Ok(());
         }
@@ -143,11 +127,6 @@ impl AppState {
                 Self::notify(app);
                 Ok(())
             },
-            |usage, cost| {
-                let (input, output) = usage.unwrap_or((0, 0));
-                self.store()?
-                    .record_usage(&settings.ai_model, input, output, cost, Utc::now())
-            },
         )
         .await?;
         Ok(())
@@ -158,19 +137,37 @@ fn mail_candidate(item: &Item, now: chrono::DateTime<Utc>, days: u32) -> bool {
         && item.meta["last_from_me"].as_bool() == Some(false)
         && now - item.timestamp >= Duration::days(days.into())
 }
-async fn run_capped<J, F, D, C>(
+fn pending_mail_candidates(
+    store: &Store,
+    items: &[Item],
+    now: chrono::DateTime<Utc>,
+    days: u32,
+) -> Result<Vec<Item>, String> {
+    let mut pending = Vec::new();
+    for item in items.iter().filter(|item| mail_candidate(item, now, days)) {
+        let Some((thread, message)) = item.meta["thread_id"]
+            .as_str()
+            .zip(item.meta["last_message_id"].as_str())
+        else {
+            continue;
+        };
+        if !store.has_judgment(thread, message)? {
+            pending.push(item.clone());
+        }
+    }
+    Ok(pending)
+}
+async fn run_capped<J, F, D>(
     pending: Vec<Item>,
     mut spent: f64,
     settings: &Settings,
     judge: J,
     mut on_done: D,
-    mut on_charge: C,
 ) -> Result<f64, String>
 where
     J: Fn(Item) -> F,
     F: Future<Output = (Item, Result<ai::ResultWithUsage, ai::JudgeError>)> + Send + 'static,
     D: FnMut(&Item, &ai::ResultWithUsage, f64) -> Result<(), String>,
-    C: FnMut(Option<(u64, u64)>, f64) -> Result<(), String>,
 {
     let mut remaining = pending.into_iter().peekable();
     let mut reserved = 0.0;
@@ -232,7 +229,16 @@ where
                             )
                         });
                         spent += cost;
-                        on_charge(usage, cost)?;
+                        let (input_tokens, output_tokens) = usage.unwrap_or((0, 0));
+                        let fallback = ai::ResultWithUsage {
+                            judgment: ai::Judgment {
+                                needs_action: true,
+                                summary: None,
+                            },
+                            input_tokens,
+                            output_tokens,
+                        };
+                        on_done(&item, &fallback, cost)?;
                         eprintln!("AI 응답 파싱 실패");
                     }
                 }
@@ -329,7 +335,6 @@ mod tests {
                 recorded += cost;
                 Ok(())
             },
-            |_, _| panic!("valid response must not use charge callback"),
         )
         .await
         .unwrap();
@@ -376,7 +381,6 @@ mod tests {
                 recorded += cost;
                 Ok(())
             },
-            |_, _| panic!("valid response must not use charge callback"),
         )
         .await
         .unwrap();
@@ -409,7 +413,6 @@ mod tests {
                 }
             },
             |_, _, _| panic!("network error must not record usage"),
-            |_, _| panic!("network error must not record usage"),
         )
         .await
         .unwrap();
@@ -417,7 +420,7 @@ mod tests {
         assert!((spent - worst).abs() < 1e-9);
     }
     #[tokio::test]
-    async fn malformed_200_charges_without_judgment() {
+    async fn malformed_200_charges_known_usage() {
         let mut settings = Settings::default();
         let items: Vec<_> = candidates().into_iter().take(1).collect();
         let worst = ai::worst_case_cost(
@@ -440,9 +443,9 @@ mod tests {
                     (item, Err(ai::JudgeError::Response(Some((100, 10)))))
                 }
             },
-            |_, _, _| panic!("malformed response must not save judgment"),
-            |usage, cost| {
-                charges.push((usage, cost));
+            |_, result, cost| {
+                charges.push(((result.input_tokens, result.output_tokens), cost));
+                assert!(result.judgment.needs_action);
                 Ok(())
             },
         )
@@ -456,7 +459,7 @@ mod tests {
         );
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(charges.len(), 1);
-        assert_eq!(charges[0].0, Some((100, 10)));
+        assert_eq!(charges[0].0, (100, 10));
         assert!((charges[0].1 - actual).abs() < 1e-9);
         assert!((spent - actual).abs() < 1e-9);
     }
@@ -476,17 +479,66 @@ mod tests {
             0.0,
             &settings,
             |item| async move { (item, Err(ai::JudgeError::Response(None))) },
-            |_, _, _| panic!("malformed response must not save judgment"),
-            |usage, cost| {
-                charges.push((usage, cost));
+            |_, result, cost| {
+                charges.push(((result.input_tokens, result.output_tokens), cost));
+                assert!(result.judgment.needs_action);
                 Ok(())
             },
         )
         .await
         .unwrap();
         assert_eq!(charges.len(), 1);
-        assert_eq!(charges[0].0, None);
+        assert_eq!(charges[0].0, (0, 0));
         assert!((charges[0].1 - worst).abs() < 1e-9);
         assert!((spent - worst).abs() < 1e-9);
+    }
+    #[tokio::test]
+    async fn malformed_200_is_not_retried_on_next_sync() {
+        let mut store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let settings = Settings::default();
+        let now = Utc::now();
+        let mut item = fixture("mail", ItemKind::Email, now - Duration::days(3));
+        item.meta["thread_id"] = "thread".into();
+        item.meta["last_message_id"] = "message".into();
+        item.meta["last_from_me"] = false.into();
+        let calls = Arc::new(AtomicUsize::new(0));
+        for _ in 0..2 {
+            let pending =
+                pending_mail_candidates(&store, std::slice::from_ref(&item), now, 2).unwrap();
+            if pending.is_empty() {
+                continue;
+            }
+            let counter = calls.clone();
+            run_capped(
+                pending,
+                store.month_cost(now.with_timezone(&chrono::Local)).unwrap(),
+                &settings,
+                move |item| {
+                    let counter = counter.clone();
+                    async move {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        (item, Err(ai::JudgeError::Response(Some((100, 10)))))
+                    }
+                },
+                |item, result, cost| {
+                    store.record_judgment(
+                        item.meta["thread_id"].as_str().unwrap(),
+                        item.meta["last_message_id"].as_str().unwrap(),
+                        result,
+                        &settings.ai_model,
+                        cost,
+                        now,
+                    )
+                },
+            )
+            .await
+            .unwrap();
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(store.has_judgment("thread", "message").unwrap());
+        assert!(store.judgments().unwrap()[&("thread".into(), "message".into())].needs_action);
+        let stats = store.stats(now.with_timezone(&chrono::Local)).unwrap();
+        assert_eq!(stats.month_input_tokens, 100);
+        assert_eq!(stats.month_output_tokens, 10);
     }
 }
