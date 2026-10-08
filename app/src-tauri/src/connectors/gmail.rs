@@ -104,16 +104,30 @@ impl Connector for Gmail {
                         ],
                     )
                     .await?;
-                    thread_to_item(&data, &email)
-                        .ok_or_else(|| ConnectorError::Message("메일 데이터 형식 오류".into()))
+                    Ok::<_, ConnectorError>(thread_to_item(&data, &email))
                 });
             }
+            let mut results = Vec::new();
             while let Some(result) = tasks.join_next().await {
-                items.push(result.map_err(|_| ConnectorError::Message("메일 조회 중단".into()))??);
+                results.push(result.map_err(|_| ConnectorError::Message("메일 조회 중단".into()))?);
             }
+            items.extend(collect_threads(results)?);
         }
         Ok(items)
     }
+}
+fn collect_threads(
+    results: Vec<Result<Option<Item>, ConnectorError>>,
+) -> Result<Vec<Item>, ConnectorError> {
+    let mut items = Vec::new();
+    for result in results {
+        match result {
+            Ok(Some(item)) => items.push(item),
+            Ok(None) => eprintln!("메일 스레드 형식 오류 — 건너뜀"),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(items)
 }
 fn from_parts(raw: &str) -> (String, String) {
     if let Some((name, rest)) = raw.rsplit_once('<') {
@@ -189,5 +203,21 @@ mod tests {
             ("a@example.com".into(), "a@example.com".into())
         );
         assert!(thread_to_item(&serde_json::json!({}), "me").is_none());
+    }
+    #[test]
+    fn collect_threads_skips_bad_format_but_propagates_fetch_errors() {
+        let valid = serde_json::json!({"id":"one","messages":[{"id":"message","internalDate":"1720000000000","payload":{"headers":[]}}]});
+        let first = thread_to_item(&valid, "me").unwrap();
+        let mut second = first.clone();
+        second.id = "two".into();
+        let items = collect_threads(vec![Ok(Some(first)), Ok(None), Ok(Some(second))]).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, "one");
+        assert_eq!(items[1].id, "two");
+        assert!(collect_threads(vec![
+            Ok(Some(items[0].clone())),
+            Err(ConnectorError::Message("fetch failed".into())),
+        ])
+        .is_err());
     }
 }

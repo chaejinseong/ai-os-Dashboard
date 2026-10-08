@@ -114,6 +114,16 @@ pub fn requested_at_from_events(events: &Value, login: &str) -> Option<DateTime<
         .max()
 }
 
+fn requested_at_or(
+    events: Option<&Value>,
+    login: &str,
+    fallback: Option<DateTime<Utc>>,
+) -> Option<DateTime<Utc>> {
+    events
+        .and_then(|value| requested_at_from_events(value, login))
+        .or(fallback)
+}
+
 pub fn search_item_to_item(json: &Value, role: Role, requested_at: Option<DateTime<Utc>>) -> Item {
     let repo = repo_name(json);
     let url = json["html_url"].as_str().unwrap_or_default();
@@ -233,9 +243,23 @@ impl Connector for GitHub {
                         match (repo_name(value), value["number"].as_u64()) {
                             (Some(repo), Some(number)) => {
                                 let url = format!("{API}/repos/{repo}/issues/{number}/events");
-                                let events =
-                                    get(&self.client, &token, &url, &[("per_page", "100")]).await?;
-                                requested_at_from_events(&events, &login).or(fallback)
+                                let events = match get(
+                                    &self.client,
+                                    &token,
+                                    &url,
+                                    &[("per_page", "100")],
+                                )
+                                .await
+                                {
+                                    Ok(events) => Some(events),
+                                    Err(_) => {
+                                        eprintln!(
+                                            "GitHub 리뷰 요청 이벤트 조회 실패 — PR 생성 시각 사용"
+                                        );
+                                        None
+                                    }
+                                };
+                                requested_at_or(events.as_ref(), &login, fallback)
                             }
                             _ => fallback,
                         }
@@ -316,6 +340,12 @@ mod tests {
                 .unwrap()
                 .to_rfc3339(),
             "2026-10-06T00:00:00+00:00"
+        );
+        let fallback = Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap();
+        assert_eq!(requested_at_or(None, "me", Some(fallback)), Some(fallback));
+        assert_eq!(
+            requested_at_or(Some(&events), "me", Some(fallback)),
+            requested_at_from_events(&events, "me")
         );
     }
 }
