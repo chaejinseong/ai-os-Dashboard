@@ -2,6 +2,7 @@ use crate::{
     missed::{self, MissedItem, Rules},
     model::{Item, ItemKind, Settings, SourceStatus},
     secrets,
+    store::Store,
     summary::{self, Summary},
     sync::AppState,
 };
@@ -97,14 +98,18 @@ pub async fn disconnect_google(
     let _guard = state.operation.lock().await;
     state.auth.disconnect().await?;
     let mut store = state.store()?;
-    for connector in &state.registry {
-        store.replace_items(connector.id(), &[])?;
+    clear_google_cache(&mut store)?;
+    AppState::notify(&app);
+    Ok(())
+}
+fn clear_google_cache(store: &mut Store) -> Result<(), String> {
+    for source in ["gmail", "calendar"] {
+        store.replace_items(source, &[])?;
         store.save_status(&SourceStatus {
-            source: connector.id().into(),
+            source: source.into(),
             ..Default::default()
         })?;
     }
-    AppState::notify(&app);
     Ok(())
 }
 #[tauri::command]
@@ -144,4 +149,56 @@ pub fn save_settings(
     state.store()?.save_settings(&settings)?;
     AppState::notify(&app);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::fixture;
+    use chrono::Utc;
+    use std::path::Path;
+
+    #[test]
+    fn google_disconnect_preserves_other_sources() {
+        let mut store = Store::open(Path::new(":memory:")).unwrap();
+        for source in ["gmail", "calendar", "notion", "github"] {
+            let mut item = fixture(source, ItemKind::Task, Utc::now());
+            item.source = source.into();
+            store.replace_items(source, &[item]).unwrap();
+            store
+                .save_status(&SourceStatus {
+                    source: source.into(),
+                    connected: true,
+                    last_synced: Some(Utc::now()),
+                    error: Some("saved status".into()),
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+
+        clear_google_cache(&mut store).unwrap();
+
+        let items = store.items().unwrap();
+        let statuses = store.statuses().unwrap();
+        for source in ["gmail", "calendar"] {
+            assert!(!items.iter().any(|item| item.source == source));
+            let status = statuses
+                .iter()
+                .find(|status| status.source == source)
+                .unwrap();
+            assert!(!status.connected);
+            assert!(status.last_synced.is_none());
+            assert!(status.error.is_none());
+        }
+        for source in ["notion", "github"] {
+            assert!(items.iter().any(|item| item.source == source));
+            let status = statuses
+                .iter()
+                .find(|status| status.source == source)
+                .unwrap();
+            assert!(status.connected);
+            assert!(status.last_synced.is_some());
+            assert_eq!(status.error.as_deref(), Some("saved status"));
+        }
+    }
 }
