@@ -1,4 +1,5 @@
 pub mod gmail;
+pub mod google_calendar;
 use crate::{model::Item, oauth::GoogleAuth};
 use std::sync::Arc;
 #[derive(Debug, thiserror::Error)]
@@ -20,5 +21,8 @@ pub trait Connector: Send + Sync {
 }
 pub type Registry = Vec<Arc<dyn Connector>>;
 pub fn registry(auth: Arc<GoogleAuth>) -> Registry {
-    vec![Arc::new(gmail::Gmail::new(auth))]
+    vec![
+        Arc::new(gmail::Gmail::new(auth.clone())),
+        Arc::new(google_calendar::GoogleCalendar::new(auth)),
+    ]
 }
