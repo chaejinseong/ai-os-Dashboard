@@ -1,5 +1,5 @@
 use crate::model::{Item, ItemKind};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Local, Utc};
 use serde::Serialize;
 pub struct Rules {
     pub mail_unanswered_days: u32,
@@ -44,7 +44,12 @@ fn overdue_task(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
     }
     Some(MissedItem {
         item: item.clone(),
-        reason: format!("마감 {}일 지남", (now - due).num_days()),
+        reason: format!(
+            "마감 {}일 지남",
+            (now.with_timezone(&Local).date_naive() - due.with_timezone(&Local).date_naive())
+                .num_days()
+                .max(1)
+        ),
         since: due,
     })
 }
@@ -64,6 +69,7 @@ pub fn missed(items: &[Item], now: DateTime<Utc>, rules: &Rules) -> Vec<MissedIt
 mod tests {
     use super::*;
     use crate::model::fixture;
+    use chrono::TimeZone;
     #[test]
     fn boundary_sender_and_order() {
         let now = Utc::now();
@@ -128,5 +134,21 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].reason, "마감 2일 지남");
         assert_eq!(got[0].since, now - Duration::days(2));
+    }
+    #[test]
+    fn task_due_yesterday_counts_as_one_day() {
+        let now = Local.with_ymd_and_hms(2026, 10, 8, 9, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 10, 7, 23, 59, 59).unwrap();
+        let mut task = fixture("yesterday", ItemKind::Task, now.with_timezone(&Utc));
+        task.due = Some(due.with_timezone(&Utc));
+        let got = missed(
+            &[task],
+            now.with_timezone(&Utc),
+            &Rules {
+                mail_unanswered_days: 2,
+            },
+        );
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].reason, "마감 1일 지남");
     }
 }

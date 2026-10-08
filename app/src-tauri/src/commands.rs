@@ -151,9 +151,16 @@ pub async fn save_notion(
     let _guard = state.operation.lock().await;
     let mapping = Notion::validate_and_map(token, &database).await?;
     let mapping_json = serde_json::to_string(&mapping).map_err(|_| "Notion 매핑 형식 오류")?;
+    let previous_token = secrets::get("notion.token")?;
     secrets::set("notion.token", token)?;
-    if let Err(error) = state.store()?.save_notion_mapping(&mapping_json) {
-        let _ = secrets::delete("notion.token");
+    if let Err(error) = state
+        .store()
+        .and_then(|store| store.save_notion_mapping(&mapping_json))
+    {
+        match previous_token {
+            Some(value) => secrets::set("notion.token", &value)?,
+            None => secrets::delete("notion.token")?,
+        }
         return Err(error);
     }
     drop(_guard);
