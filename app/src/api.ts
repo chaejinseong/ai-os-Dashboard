@@ -27,6 +27,7 @@ export interface MissedItem {
     reason: string;
     since: string;
     summary: string | null;
+    feedback_key: string;
 }
 export interface Summary {
     completion: {
@@ -70,6 +71,7 @@ export interface Stats {
     feedback_14d: { up: number; down: number; ratio: number };
     key_last4: string | null;
     cap_reached: boolean;
+    ai_error: string | null;
 }
 export const api = {
     dashboard: (periodDays: number) => invoke<Dashboard>('get_dashboard', { periodDays }),

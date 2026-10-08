@@ -11,7 +11,12 @@ export default function Settings({ settings, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => setForm(settings), [settings]);
-  useEffect(() => { void api.stats().then(setStats).catch(e => setMessage(String(e))); }, []);
+  useEffect(() => {
+    const refresh = () => { void api.stats().then(setStats).catch(error => setMessage(String(error))); };
+    refresh();
+    const listener = api.onUpdate(refresh);
+    return () => { void listener.then(unlisten => unlisten()); };
+  }, []);
 
   async function saveSettings(event: React.FormEvent) {
     event.preventDefault();
@@ -63,6 +68,7 @@ export default function Settings({ settings, onSaved }: {
     </form>
     <section className="card settings ai-stats">
       <h2>AI 사용 현황</h2>
+      {stats?.ai_error && <p className="danger" role="alert">{stats.ai_error}</p>}
       <p>이번 달 비용 <strong>${stats?.month_cost_usd.toFixed(4) ?? '0.0000'}</strong> / ${stats?.cap_usd.toFixed(2) ?? form.ai_monthly_cap_usd.toFixed(2)}</p>
       <progress max={stats && stats.cap_usd > 0 ? stats.cap_usd : 1}
         value={stats ? Math.min(stats.month_cost_usd, stats.cap_usd || 1) : 0} />

@@ -3,11 +3,11 @@ import { api, openItem, type MissedItem } from '../api';
 
 export default function Alerts({ items }: { items: MissedItem[] }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const visible = items.filter(m => !hidden.has(`${m.item.source}:${m.item.id}`));
+  const visible = items.filter(m => !hidden.has(`${m.item.source}:${m.feedback_key}`));
   async function vote(m: MissedItem, value: 1 | -1) {
-    const id = `${m.item.source}:${m.item.id}`;
+    const id = `${m.item.source}:${m.feedback_key}`;
     if (value === -1) setHidden(previous => new Set(previous).add(id));
-    try { await api.setFeedback(m.item.source, m.item.id, value); }
+    try { await api.setFeedback(m.item.source, m.feedback_key, value); }
     catch (error) {
       if (value === -1) setHidden(previous => { const next = new Set(previous); next.delete(id); return next; });
       window.alert(String(error));
@@ -15,7 +15,7 @@ export default function Alerts({ items }: { items: MissedItem[] }) {
   }
   return <><h1>알림 <small>{visible.length}건</small></h1>
     <section className="card missed-card">
-      {visible.map(m => <div className={`item-row source-${m.item.source}`} key={`${m.item.source}:${m.item.id}`}>
+      {visible.map(m => <div className={`item-row source-${m.item.source}`} key={`${m.item.source}:${m.feedback_key}`}>
         <button className="alert-open" onClick={() => void openItem(m.item)}>
           <span className="eyebrow">{m.item.source}</span>
           <span><strong>{m.item.title}</strong><small className="muted">{m.item.subtitle}</small>

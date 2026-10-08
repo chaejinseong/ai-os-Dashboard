@@ -220,6 +220,29 @@ impl Store {
             .map(|found| found.is_some())
             .map_err(|error| error.to_string())
     }
+    pub fn ai_error(&self) -> Result<Option<String>, String> {
+        self.conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='ai.last_error'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+    pub fn set_ai_error(&self, error: Option<&str>) -> Result<(), String> {
+        match error {
+            Some(value) => self.conn.execute(
+                "INSERT OR REPLACE INTO settings(key,value) VALUES('ai.last_error',?1)",
+                [value],
+            ),
+            None => self
+                .conn
+                .execute("DELETE FROM settings WHERE key='ai.last_error'", []),
+        }
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
     pub fn judgments(&self) -> Result<HashMap<(String, String), Judgment>, String> {
         let mut statement = self
             .conn
@@ -260,7 +283,7 @@ impl Store {
         now: DateTime<Utc>,
     ) -> Result<(), String> {
         let transaction = self.conn.transaction().map_err(|error| error.to_string())?;
-        let inserted = transaction
+        transaction
             .execute(
                 "INSERT OR IGNORE INTO ai_judgments VALUES(?1,?2,?3,?4,?5)",
                 params![
@@ -272,16 +295,14 @@ impl Store {
                 ],
             )
             .map_err(|error| error.to_string())?;
-        if inserted == 1 {
-            Self::record_usage(
-                &transaction,
-                model,
-                result.input_tokens,
-                result.output_tokens,
-                cost,
-                now,
-            )?;
-        }
+        Self::record_usage(
+            &transaction,
+            model,
+            result.input_tokens,
+            result.output_tokens,
+            cost,
+            now,
+        )?;
         transaction.commit().map_err(|error| error.to_string())
     }
     fn record_usage(
@@ -454,10 +475,10 @@ mod tests {
             Some("답장")
         );
         let stats = store.stats(now + Duration::seconds(1)).unwrap();
-        assert!((stats.month_cost_usd - 0.002).abs() < 1e-9);
-        assert_eq!(stats.month_input_tokens, 100);
-        assert_eq!(stats.month_output_tokens, 10);
-        assert!((store.month_cost(now + Duration::seconds(1)).unwrap() - 0.002).abs() < 1e-9);
+        assert!((stats.month_cost_usd - 0.004).abs() < 1e-9);
+        assert_eq!(stats.month_input_tokens, 200);
+        assert_eq!(stats.month_output_tokens, 20);
+        assert!((store.month_cost(now + Duration::seconds(1)).unwrap() - 0.004).abs() < 1e-9);
     }
     #[test]
     fn usage_without_judgment_is_counted() {
@@ -497,5 +518,17 @@ mod tests {
         assert!(store
             .set_feedback("gmail", "a", 0, now.with_timezone(&Utc))
             .is_err());
+    }
+    #[test]
+    fn ai_error_setting_round_trip() {
+        let store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        assert_eq!(store.ai_error().unwrap(), None);
+        store.set_ai_error(Some("AI 키 확인 필요 (401)")).unwrap();
+        assert_eq!(
+            store.ai_error().unwrap().as_deref(),
+            Some("AI 키 확인 필요 (401)")
+        );
+        store.set_ai_error(None).unwrap();
+        assert_eq!(store.ai_error().unwrap(), None);
     }
 }

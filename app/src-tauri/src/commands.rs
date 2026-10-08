@@ -58,7 +58,7 @@ fn apply_ai_stages(items: &mut [Item], context: &Context) {
         if item.kind != ItemKind::Email
             || context
                 .feedback
-                .get(&(item.source.clone(), item.id.clone()))
+                .get(&(item.source.clone(), missed::feedback_key(item)))
                 == Some(&-1)
         {
             continue;
@@ -294,6 +294,7 @@ pub fn save_anthropic_key(
         .try_lock()
         .map_err(|_| "동기화 중에는 키를 변경할 수 없습니다")?;
     secrets::set("anthropic.api_key", key)?;
+    state.store()?.set_ai_error(None)?;
     AppState::notify(&app);
     Ok(())
 }
@@ -317,12 +318,17 @@ pub struct StatsResponse {
     stats: Stats,
     key_last4: Option<String>,
     cap_reached: bool,
+    ai_error: Option<String>,
 }
 #[tauri::command]
 pub fn get_stats(state: State<'_, Arc<AppState>>) -> Result<StatsResponse, String> {
-    let (stats, settings) = {
+    let (stats, settings, ai_error) = {
         let store = state.store()?;
-        (store.stats(chrono::Local::now())?, store.settings()?)
+        (
+            store.stats(chrono::Local::now())?,
+            store.settings()?,
+            store.ai_error()?,
+        )
     };
     let key_last4 = secrets::get("anthropic.api_key")?.map(|key| {
         key.chars()
@@ -338,6 +344,7 @@ pub fn get_stats(state: State<'_, Arc<AppState>>) -> Result<StatsResponse, Strin
         stats,
         key_last4,
         cap_reached,
+        ai_error,
     })
 }
 fn cap_reached(spent: f64, settings: &Settings) -> bool {
@@ -431,10 +438,20 @@ mod tests {
         assert_eq!(email.stage, Some(Stage::Requested));
         context
             .feedback
-            .insert(("gmail".into(), "thread".into()), -1);
+            .insert(("gmail".into(), "thread#message".into()), -1);
         email.stage = None;
         apply_ai_stages(std::slice::from_mut(&mut email), &context);
         assert!(email.stage.is_none());
+        email.meta["last_message_id"] = "new-message".into();
+        context.judgments.insert(
+            ("thread".into(), "new-message".into()),
+            Judgment {
+                needs_action: true,
+                summary: None,
+            },
+        );
+        apply_ai_stages(std::slice::from_mut(&mut email), &context);
+        assert_eq!(email.stage, Some(Stage::Requested));
     }
     #[test]
     fn cap_reached_when_minimal_request_will_not_fit() {

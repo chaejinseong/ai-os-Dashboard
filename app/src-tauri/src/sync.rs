@@ -98,7 +98,8 @@ impl AppState {
             .month_cost(now.with_timezone(&chrono::Local))?;
         let client = reqwest::Client::new();
         let model = settings.ai_model.clone();
-        run_capped(
+        let succeeded = std::sync::atomic::AtomicBool::new(false);
+        let (_, error) = run_capped(
             pending,
             spent,
             &settings,
@@ -124,11 +125,16 @@ impl AppState {
                     cost,
                     Utc::now(),
                 )?;
+                succeeded.store(true, std::sync::atomic::Ordering::Relaxed);
                 Self::notify(app);
                 Ok(())
             },
         )
         .await?;
+        if error.is_some() || succeeded.load(std::sync::atomic::Ordering::Relaxed) {
+            self.store()?.set_ai_error(error.as_deref())?;
+            Self::notify(app);
+        }
         Ok(())
     }
 }
@@ -162,13 +168,21 @@ fn warn_if_over_cap(spent: f64, reserved: f64, cap: f64) {
         eprintln!("AI 비용 상한 초과 가능: 반올림 또는 실제 비용이 예약 추정치를 넘음");
     }
 }
+fn status_error_message(code: u16) -> String {
+    match code {
+        401 => "AI 키 확인 필요 (401)".into(),
+        403 => "AI 권한 없음 (403)".into(),
+        429 => "AI 요청 한도 초과 (429)".into(),
+        _ => format!("AI 요청 실패 ({code})"),
+    }
+}
 async fn run_capped<J, F, D>(
     pending: Vec<Item>,
     mut spent: f64,
     settings: &Settings,
     judge: J,
     mut on_done: D,
-) -> Result<f64, String>
+) -> Result<(f64, Option<String>), String>
 where
     J: Fn(Item) -> F,
     F: Future<Output = (Item, Result<ai::ResultWithUsage, ai::JudgeError>)> + Send + 'static,
@@ -178,8 +192,10 @@ where
     let mut reserved = 0.0;
     let mut tasks = tokio::task::JoinSet::new();
     let mut reservations: HashMap<tokio::task::Id, f64> = HashMap::new();
+    let mut last_error = None;
+    let mut stop_after_auth_error = false;
     loop {
-        while tasks.len() < 2 {
+        while !stop_after_auth_error && tasks.len() < 2 {
             let Some(item) = remaining.peek() else {
                 break;
             };
@@ -219,10 +235,18 @@ where
                         spent += cost;
                         on_done(&item, &result, cost)?;
                     }
-                    Err(ai::JudgeError::Status(code)) => eprintln!("AI 요청 실패 ({code})"),
+                    Err(ai::JudgeError::Status(code)) => {
+                        let message = status_error_message(code);
+                        eprintln!("{message}");
+                        last_error = Some(message);
+                        if code == 401 || code == 403 {
+                            stop_after_auth_error = true;
+                        }
+                    }
                     Err(ai::JudgeError::Network) => {
                         spent += worst;
-                        eprintln!("AI 네트워크 또는 응답 오류");
+                        last_error = Some("AI 네트워크 오류".into());
+                        eprintln!("AI 네트워크 오류");
                     }
                     Err(ai::JudgeError::Response(usage)) => {
                         let cost = usage.map_or(worst, |(input, output)| {
@@ -257,7 +281,7 @@ where
         }
         warn_if_over_cap(spent, reserved, settings.ai_monthly_cap_usd);
     }
-    Ok(spent)
+    Ok((spent, last_error))
 }
 pub async fn run(state: Arc<AppState>, app: tauri::AppHandle) {
     let _ = state.sync(&app).await;
@@ -324,7 +348,7 @@ mod tests {
         let counter = calls.clone();
         let model = settings.clone();
         let mut recorded = 0.0;
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -363,7 +387,7 @@ mod tests {
         let (counter, active_copy, peak_copy) = (calls.clone(), active.clone(), peak.clone());
         let model = settings.clone();
         let mut recorded = 0.0;
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -406,7 +430,7 @@ mod tests {
         settings.ai_monthly_cap_usd = worst * 1.5;
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = calls.clone();
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -437,7 +461,7 @@ mod tests {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = calls.clone();
         let mut charges = Vec::new();
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -479,7 +503,7 @@ mod tests {
         );
         settings.ai_monthly_cap_usd = worst * 1.5;
         let mut charges = Vec::new();
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -559,7 +583,7 @@ mod tests {
         let model = settings.clone();
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = calls.clone();
-        let spent = run_capped(
+        let (spent, _) = run_capped(
             items,
             0.0,
             &settings,
@@ -588,5 +612,36 @@ mod tests {
         assert!(ai::fits_cap(spent, reserved, worst, cap));
         assert!(spent + (reserved + worst) > cap);
         warn_if_over_cap(spent, reserved + worst, cap);
+    }
+    #[tokio::test]
+    async fn unauthorized_status_stops_later_candidates() {
+        let mut settings = Settings::default();
+        let items = candidates();
+        let worst = ai::worst_case_cost(
+            &ai::request_body(&settings.ai_model, &items[0]),
+            settings.ai_price_in_per_mtok,
+            settings.ai_price_out_per_mtok,
+        );
+        settings.ai_monthly_cap_usd = worst * 1.5;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        let (spent, error) = run_capped(
+            items,
+            0.0,
+            &settings,
+            move |item| {
+                let counter = counter.clone();
+                async move {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    (item, Err(ai::JudgeError::Status(401)))
+                }
+            },
+            |_, _, _| panic!("401 response must not save judgment"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(spent, 0.0);
+        assert_eq!(error.as_deref(), Some("AI 키 확인 필요 (401)"));
     }
 }

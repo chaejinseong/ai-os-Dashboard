@@ -20,6 +20,18 @@ pub struct MissedItem {
     pub reason: String,
     pub since: DateTime<Utc>,
     pub summary: Option<String>,
+    pub feedback_key: String,
+}
+pub fn feedback_key(item: &Item) -> String {
+    if item.kind == ItemKind::Email {
+        format!(
+            "{}#{}",
+            item.id,
+            item.meta["last_message_id"].as_str().unwrap_or_default()
+        )
+    } else {
+        item.id.clone()
+    }
 }
 fn unanswered(
     item: &Item,
@@ -50,6 +62,7 @@ fn unanswered(
         display_item.stage = Some(Stage::Requested);
     }
     Some(MissedItem {
+        feedback_key: feedback_key(item),
         item: display_item,
         reason: if judgment.is_some() {
             format!("{}일째 답장 안 함", age.num_days())
@@ -73,6 +86,7 @@ fn unanswered_invitation(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> 
         .map(|created| created.with_timezone(&Utc))
         .unwrap_or(now);
     Some(MissedItem {
+        feedback_key: feedback_key(item),
         item: item.clone(),
         reason: "초대에 응답 안 함".into(),
         since,
@@ -85,6 +99,7 @@ fn overdue_task(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
         return None;
     }
     Some(MissedItem {
+        feedback_key: feedback_key(item),
         item: item.clone(),
         reason: format!(
             "마감 {}일 지남",
@@ -105,6 +120,7 @@ fn review_requested(item: &Item, now: DateTime<Utc>, rules: &Rules) -> Option<Mi
         .with_timezone(&Utc);
     let age = now - since;
     (age >= Duration::days(rules.github_review_days.into())).then(|| MissedItem {
+        feedback_key: feedback_key(item),
         item: item.clone(),
         reason: format!("리뷰 요청 {}일째", age.num_days()),
         since,
@@ -117,6 +133,7 @@ fn overdue_issue(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
         return None;
     }
     Some(MissedItem {
+        feedback_key: feedback_key(item),
         item: item.clone(),
         reason: format!(
             "마일스톤 기한 {}일 지남",
@@ -136,7 +153,7 @@ pub fn missed(
 ) -> Vec<MissedItem> {
     let mut result: Vec<_> = items
         .iter()
-        .filter(|i| context.feedback.get(&(i.source.clone(), i.id.clone())) != Some(&-1))
+        .filter(|i| context.feedback.get(&(i.source.clone(), feedback_key(i))) != Some(&-1))
         .filter_map(|i| {
             unanswered(i, now, rules, context)
                 .or_else(|| unanswered_invitation(i, now))
@@ -332,7 +349,9 @@ mod tests {
                 summary: Some("광고".into()),
             },
         );
-        context.feedback.insert(("gmail".into(), "down".into()), -1);
+        context
+            .feedback
+            .insert(("gmail".into(), "down#last".into()), -1);
         let mut down_task = fixture("down-task", ItemKind::Task, now);
         down_task.source = "notion".into();
         down_task.due = Some(now - Duration::days(1));
@@ -359,5 +378,35 @@ mod tests {
         assert_eq!(got[0].item.stage, Some(Stage::Requested));
         assert_eq!(got[1].reason, "3일째 답장 안 함 (AI 판정 없음)");
         assert!(got[1].summary.is_none());
+    }
+    #[test]
+    fn feedback_is_scoped_to_email_message_but_tasks_keep_item_id() {
+        let now = Utc::now();
+        let rules = Rules {
+            mail_unanswered_days: 2,
+            github_review_days: 1,
+        };
+        let mut email = fixture("thread", ItemKind::Email, now - Duration::days(3));
+        email.source = "gmail".into();
+        email.meta["thread_id"] = "thread".into();
+        email.meta["last_message_id"] = "old".into();
+        let mut context = Context::default();
+        context
+            .feedback
+            .insert(("gmail".into(), feedback_key(&email)), -1);
+        assert!(missed(std::slice::from_ref(&email), now, &rules, &context).is_empty());
+        email.meta["last_message_id"] = "new".into();
+        let got = missed(std::slice::from_ref(&email), now, &rules, &context);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].feedback_key, "thread#new");
+
+        let mut task = fixture("task", ItemKind::Task, now);
+        task.source = "notion".into();
+        task.due = Some(now - Duration::days(1));
+        assert_eq!(feedback_key(&task), "task");
+        context
+            .feedback
+            .insert(("notion".into(), "task".into()), -1);
+        assert!(missed(&[task], now, &rules, &context).is_empty());
     }
 }
