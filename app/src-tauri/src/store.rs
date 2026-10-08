@@ -279,6 +279,22 @@ impl Store {
         }
         transaction.commit().map_err(|error| error.to_string())
     }
+    pub fn record_usage(
+        &self,
+        model: &str,
+        input_tokens: u64,
+        output_tokens: u64,
+        cost: f64,
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO ai_usage(model,input_tokens,output_tokens,cost_usd,created_at) VALUES(?1,?2,?3,?4,?5)",
+                params![model, input_tokens, output_tokens, cost, now.timestamp()],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
     pub fn set_feedback(
         &self,
         source: &str,
@@ -437,6 +453,17 @@ mod tests {
         assert_eq!(stats.month_input_tokens, 100);
         assert_eq!(stats.month_output_tokens, 10);
         assert!((store.month_cost(now + Duration::seconds(1)).unwrap() - 0.002).abs() < 1e-9);
+    }
+    #[test]
+    fn usage_without_judgment_is_counted() {
+        let store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let now = Utc::now();
+        store.record_usage("model", 100, 10, 0.002, now).unwrap();
+        assert!(!store.has_judgment("thread", "message").unwrap());
+        let stats = store.stats(now.with_timezone(&Local)).unwrap();
+        assert!((stats.month_cost_usd - 0.002).abs() < 1e-9);
+        assert_eq!(stats.month_input_tokens, 100);
+        assert_eq!(stats.month_output_tokens, 10);
     }
     #[test]
     fn feedback_counts_and_settings_round_trip() {

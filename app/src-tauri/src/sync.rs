@@ -143,6 +143,11 @@ impl AppState {
                 Self::notify(app);
                 Ok(())
             },
+            |usage, cost| {
+                let (input, output) = usage.unwrap_or((0, 0));
+                self.store()?
+                    .record_usage(&settings.ai_model, input, output, cost, Utc::now())
+            },
         )
         .await?;
         Ok(())
@@ -153,17 +158,19 @@ fn mail_candidate(item: &Item, now: chrono::DateTime<Utc>, days: u32) -> bool {
         && item.meta["last_from_me"].as_bool() == Some(false)
         && now - item.timestamp >= Duration::days(days.into())
 }
-async fn run_capped<J, F, D>(
+async fn run_capped<J, F, D, C>(
     pending: Vec<Item>,
     mut spent: f64,
     settings: &Settings,
     judge: J,
     mut on_done: D,
+    mut on_charge: C,
 ) -> Result<f64, String>
 where
     J: Fn(Item) -> F,
     F: Future<Output = (Item, Result<ai::ResultWithUsage, ai::JudgeError>)> + Send + 'static,
     D: FnMut(&Item, &ai::ResultWithUsage, f64) -> Result<(), String>,
+    C: FnMut(Option<(u64, u64)>, f64) -> Result<(), String>,
 {
     let mut remaining = pending.into_iter().peekable();
     let mut reserved = 0.0;
@@ -214,6 +221,19 @@ where
                     Err(ai::JudgeError::Network) => {
                         spent += worst;
                         eprintln!("AI 네트워크 또는 응답 오류");
+                    }
+                    Err(ai::JudgeError::Response(usage)) => {
+                        let cost = usage.map_or(worst, |(input, output)| {
+                            ai::cost_usd(
+                                input,
+                                output,
+                                settings.ai_price_in_per_mtok,
+                                settings.ai_price_out_per_mtok,
+                            )
+                        });
+                        spent += cost;
+                        on_charge(usage, cost)?;
+                        eprintln!("AI 응답 파싱 실패");
                     }
                 }
             }
@@ -309,6 +329,7 @@ mod tests {
                 recorded += cost;
                 Ok(())
             },
+            |_, _| panic!("valid response must not use charge callback"),
         )
         .await
         .unwrap();
@@ -355,6 +376,7 @@ mod tests {
                 recorded += cost;
                 Ok(())
             },
+            |_, _| panic!("valid response must not use charge callback"),
         )
         .await
         .unwrap();
@@ -387,10 +409,84 @@ mod tests {
                 }
             },
             |_, _, _| panic!("network error must not record usage"),
+            |_, _| panic!("network error must not record usage"),
         )
         .await
         .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!((spent - worst).abs() < 1e-9);
+    }
+    #[tokio::test]
+    async fn malformed_200_charges_without_judgment() {
+        let mut settings = Settings::default();
+        let items: Vec<_> = candidates().into_iter().take(1).collect();
+        let worst = ai::worst_case_cost(
+            &ai::request_body(&settings.ai_model, &items[0]),
+            settings.ai_price_in_per_mtok,
+            settings.ai_price_out_per_mtok,
+        );
+        settings.ai_monthly_cap_usd = worst * 1.5;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        let mut charges = Vec::new();
+        let spent = run_capped(
+            items,
+            0.0,
+            &settings,
+            move |item| {
+                let counter = counter.clone();
+                async move {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    (item, Err(ai::JudgeError::Response(Some((100, 10)))))
+                }
+            },
+            |_, _, _| panic!("malformed response must not save judgment"),
+            |usage, cost| {
+                charges.push((usage, cost));
+                Ok(())
+            },
+        )
+        .await
+        .unwrap();
+        let actual = ai::cost_usd(
+            100,
+            10,
+            settings.ai_price_in_per_mtok,
+            settings.ai_price_out_per_mtok,
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(charges.len(), 1);
+        assert_eq!(charges[0].0, Some((100, 10)));
+        assert!((charges[0].1 - actual).abs() < 1e-9);
+        assert!((spent - actual).abs() < 1e-9);
+    }
+    #[tokio::test]
+    async fn malformed_200_without_usage_charges_reservation() {
+        let mut settings = Settings::default();
+        let items = candidates();
+        let worst = ai::worst_case_cost(
+            &ai::request_body(&settings.ai_model, &items[0]),
+            settings.ai_price_in_per_mtok,
+            settings.ai_price_out_per_mtok,
+        );
+        settings.ai_monthly_cap_usd = worst * 1.5;
+        let mut charges = Vec::new();
+        let spent = run_capped(
+            items,
+            0.0,
+            &settings,
+            |item| async move { (item, Err(ai::JudgeError::Response(None))) },
+            |_, _, _| panic!("malformed response must not save judgment"),
+            |usage, cost| {
+                charges.push((usage, cost));
+                Ok(())
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(charges.len(), 1);
+        assert_eq!(charges[0].0, None);
+        assert!((charges[0].1 - worst).abs() < 1e-9);
         assert!((spent - worst).abs() < 1e-9);
     }
 }

@@ -23,6 +23,8 @@ pub enum JudgeError {
     Status(u16),
     #[error("AI 네트워크 또는 응답 오류")]
     Network,
+    #[error("AI 응답 파싱 실패")]
+    Response(Option<(u64, u64)>),
 }
 
 pub const INPUT_OVERHEAD_TOKENS: u64 = 64;
@@ -94,6 +96,17 @@ pub fn parse_response(value: &Value) -> ResultWithUsage {
     }
 }
 
+fn parse_api_response(body: &str) -> Result<ResultWithUsage, JudgeError> {
+    let value: Value = serde_json::from_str(body).map_err(|_| JudgeError::Response(None))?;
+    if !value["content"][0]["text"].is_string() {
+        let usage = value["usage"]["input_tokens"]
+            .as_u64()
+            .zip(value["usage"]["output_tokens"].as_u64());
+        return Err(JudgeError::Response(usage));
+    }
+    Ok(parse_response(&value))
+}
+
 pub fn cost_usd(input_tokens: u64, output_tokens: u64, price_in: f64, price_out: f64) -> f64 {
     ((input_tokens as f64) * price_in + (output_tokens as f64) * price_out) / 1_000_000.0
 }
@@ -134,11 +147,8 @@ pub async fn judge(
     if !response.status().is_success() {
         return Err(JudgeError::Status(response.status().as_u16()));
     }
-    let value = response
-        .json::<Value>()
-        .await
-        .map_err(|_| JudgeError::Network)?;
-    Ok(parse_response(&value))
+    let body = response.text().await.map_err(|_| JudgeError::Network)?;
+    parse_api_response(&body)
 }
 
 #[cfg(test)]
@@ -195,6 +205,17 @@ mod tests {
         assert!(broken.judgment.summary.is_none());
         assert_eq!(broken.input_tokens, 100);
         assert_eq!(broken.output_tokens, 10);
+    }
+    #[test]
+    fn malformed_api_body_reports_readable_usage() {
+        assert!(matches!(
+            parse_api_response(r#"{"content":[],"usage":{"input_tokens":100,"output_tokens":10}}"#),
+            Err(JudgeError::Response(Some((100, 10))))
+        ));
+        assert!(matches!(
+            parse_api_response("invalid json"),
+            Err(JudgeError::Response(None))
+        ));
     }
     #[test]
     fn cost_and_local_month_boundary() {
