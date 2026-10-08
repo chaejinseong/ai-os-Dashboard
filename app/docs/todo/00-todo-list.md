@@ -10,6 +10,7 @@ deleted, or archived.
 | 261006-1535-01-google-cloud-setup.md | open | Gmail OAuth 클라이언트 만들기 (사람이 직접) |
 | 261006-1730-01-notion-github-setup.md | open | Notion 통합·GitHub 토큰·Anthropic 키 준비 (사람이 직접) |
 | 261008-1045-01-m2b-spec-file-scope.md | done | M2b 명령 등록·매핑 저장에 필요한 파일 범위 보완 |
+| 261008-1402-01-m3-spec-file-scope.md | done | M3 설정·상단 바 구현 파일 범위 승인 대기 |
 
 ## How to add an item
 
