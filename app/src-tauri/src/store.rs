@@ -10,7 +10,7 @@ impl Store {
         Self::from_connection(Connection::open(path).map_err(|e| e.to_string())?)
     }
     fn from_connection(conn: Connection) -> Result<Self, String> {
-        conn.execute_batch("CREATE TABLE IF NOT EXISTS items(source TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(source,id)); CREATE TABLE IF NOT EXISTS source_status(source TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO settings VALUES('sync_minutes','15'),('mail_unanswered_days','2');").map_err(|e|e.to_string())?;
+        conn.execute_batch("CREATE TABLE IF NOT EXISTS items(source TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(source,id)); CREATE TABLE IF NOT EXISTS source_status(source TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO settings VALUES('sync_minutes','15'),('mail_unanswered_days','2'),('github_review_days','1');").map_err(|e|e.to_string())?;
         Ok(Self { conn })
     }
     pub fn replace_items(&mut self, source: &str, items: &[Item]) -> Result<(), String> {
@@ -90,6 +90,43 @@ impl Store {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+    pub fn github_login(&self) -> Result<Option<String>, String> {
+        match self.conn.query_row(
+            "SELECT value FROM settings WHERE key='github.login'",
+            [],
+            |row| row.get(0),
+        ) {
+            Ok(value) => Ok(Some(value)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+    pub fn save_github_login(&self, login: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO settings(key,value) VALUES('github.login',?1)",
+                [login],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    pub fn clear_github_login(&self) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key='github.login'", [])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    pub fn github_review_days(&self) -> Result<u32, String> {
+        self.conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='github_review_days'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|error| error.to_string())?
+            .parse::<u32>()
+            .map_err(|error| error.to_string())
+    }
     pub fn settings(&self) -> Result<Settings, String> {
         let read = |key| {
             self.conn
@@ -159,5 +196,15 @@ mod tests {
         );
         store.clear_notion_mapping().unwrap();
         assert!(store.notion_mapping().unwrap().is_none());
+    }
+    #[test]
+    fn github_login_and_review_days() {
+        let store = Store::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        assert_eq!(store.github_review_days().unwrap(), 1);
+        assert!(store.github_login().unwrap().is_none());
+        store.save_github_login("octocat").unwrap();
+        assert_eq!(store.github_login().unwrap().as_deref(), Some("octocat"));
+        store.clear_github_login().unwrap();
+        assert!(store.github_login().unwrap().is_none());
     }
 }

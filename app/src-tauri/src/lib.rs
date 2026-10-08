@@ -40,6 +40,9 @@ pub fn run() {
             commands::has_google_client,
             commands::save_notion,
             commands::disconnect_notion,
+            commands::save_github,
+            commands::disconnect_github,
+            commands::get_github_login,
             commands::get_settings,
             commands::save_settings
         ])

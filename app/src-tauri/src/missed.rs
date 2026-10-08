@@ -3,6 +3,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use serde::Serialize;
 pub struct Rules {
     pub mail_unanswered_days: u32,
+    pub github_review_days: u32,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct MissedItem {
@@ -53,6 +54,36 @@ fn overdue_task(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
         since: due,
     })
 }
+fn review_requested(item: &Item, now: DateTime<Utc>, rules: &Rules) -> Option<MissedItem> {
+    if item.kind != ItemKind::PullRequest || item.meta.get("role")?.as_str()? != "reviewer" {
+        return None;
+    }
+    let since = DateTime::parse_from_rfc3339(item.meta.get("requested_at")?.as_str()?)
+        .ok()?
+        .with_timezone(&Utc);
+    let age = now - since;
+    (age >= Duration::days(rules.github_review_days.into())).then(|| MissedItem {
+        item: item.clone(),
+        reason: format!("리뷰 요청 {}일째", age.num_days()),
+        since,
+    })
+}
+fn overdue_issue(item: &Item, now: DateTime<Utc>) -> Option<MissedItem> {
+    let due = item.due?;
+    if item.kind != ItemKind::Issue || due >= now {
+        return None;
+    }
+    Some(MissedItem {
+        item: item.clone(),
+        reason: format!(
+            "마일스톤 기한 {}일 지남",
+            (now.with_timezone(&Local).date_naive() - due.with_timezone(&Local).date_naive())
+                .num_days()
+                .max(1)
+        ),
+        since: due,
+    })
+}
 pub fn missed(items: &[Item], now: DateTime<Utc>, rules: &Rules) -> Vec<MissedItem> {
     let mut result: Vec<_> = items
         .iter()
@@ -60,6 +91,8 @@ pub fn missed(items: &[Item], now: DateTime<Utc>, rules: &Rules) -> Vec<MissedIt
             unanswered(i, now, rules)
                 .or_else(|| unanswered_invitation(i, now))
                 .or_else(|| overdue_task(i, now))
+                .or_else(|| review_requested(i, now, rules))
+                .or_else(|| overdue_issue(i, now))
         })
         .collect();
     result.sort_by_key(|i| i.since);
@@ -75,6 +108,7 @@ mod tests {
         let now = Utc::now();
         let rules = Rules {
             mail_unanswered_days: 2,
+            github_review_days: 1,
         };
         let young = fixture("young", ItemKind::Email, now - Duration::hours(47));
         let edge = fixture("edge", ItemKind::Email, now - Duration::days(2));
@@ -106,6 +140,7 @@ mod tests {
             now,
             &Rules {
                 mail_unanswered_days: 2,
+                github_review_days: 1,
             },
         );
         assert_eq!(got.len(), 1);
@@ -129,6 +164,7 @@ mod tests {
             now,
             &Rules {
                 mail_unanswered_days: 2,
+                github_review_days: 1,
             },
         );
         assert_eq!(got.len(), 1);
@@ -146,9 +182,50 @@ mod tests {
             now.with_timezone(&Utc),
             &Rules {
                 mail_unanswered_days: 2,
+                github_review_days: 1,
             },
         );
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].reason, "마감 1일 지남");
+    }
+    #[test]
+    fn review_request_boundary_and_role() {
+        let now = Utc::now();
+        let rules = Rules {
+            mail_unanswered_days: 2,
+            github_review_days: 1,
+        };
+        let mut edge = fixture("edge", ItemKind::PullRequest, now);
+        edge.meta = serde_json::json!({"role":"reviewer", "requested_at":(now - Duration::days(1)).to_rfc3339()});
+        let mut young = edge.clone();
+        young.id = "young".into();
+        young.meta["requested_at"] = (now - Duration::days(1) + Duration::seconds(1))
+            .to_rfc3339()
+            .into();
+        let mut author = edge.clone();
+        author.id = "author".into();
+        author.meta["role"] = "author".into();
+        let got = missed(&[young, author, edge], now, &rules);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].item.id, "edge");
+        assert_eq!(got[0].reason, "리뷰 요청 1일째");
+        assert_eq!(got[0].since, now - Duration::days(1));
+    }
+    #[test]
+    fn issue_due_boundary() {
+        let now = Utc::now();
+        let rules = Rules {
+            mail_unanswered_days: 2,
+            github_review_days: 1,
+        };
+        let mut overdue = fixture("overdue", ItemKind::Issue, now);
+        overdue.due = Some(now - Duration::seconds(1));
+        let mut at_due = overdue.clone();
+        at_due.id = "at_due".into();
+        at_due.due = Some(now);
+        let got = missed(&[at_due, overdue], now, &rules);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].reason, "마일스톤 기한 1일 지남");
+        assert_eq!(got[0].since, now - Duration::seconds(1));
     }
 }

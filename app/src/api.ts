@@ -65,6 +65,9 @@ export const api = {
     hasClient: () => invoke<boolean>('has_google_client'), settings: () => invoke<Settings>('get_settings'), saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
     saveNotion: (token: string, database: string) => invoke<void>('save_notion', { token, database }),
     disconnectNotion: () => invoke<void>('disconnect_notion'),
+    saveGithub: (token: string) => invoke<void>('save_github', { token }),
+    disconnectGithub: () => invoke<void>('disconnect_github'),
+    githubLogin: () => invoke<string | null>('get_github_login'),
     onUpdate: (handler: () => void) => listen('dashboard-updated', handler),
 };
 export async function openItem(item: Item) { try {

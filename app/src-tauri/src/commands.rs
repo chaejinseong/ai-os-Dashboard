@@ -1,4 +1,5 @@
 use crate::{
+    connectors::github::GitHub,
     connectors::notion::Notion,
     missed::{self, MissedItem, Rules},
     model::{Item, ItemKind, Settings, SourceStatus},
@@ -36,6 +37,7 @@ pub fn get_dashboard(
         chrono::Utc::now(),
         &Rules {
             mail_unanswered_days: settings.mail_unanswered_days,
+            github_review_days: store.github_review_days()?,
         },
     );
     Ok(Dashboard {
@@ -182,6 +184,54 @@ pub async fn disconnect_notion(
     })?;
     AppState::notify(&app);
     Ok(())
+}
+#[tauri::command]
+pub async fn save_github(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+    token: String,
+) -> Result<(), String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("GitHub 토큰을 입력하세요".into());
+    }
+    let guard = state.operation.lock().await;
+    let login = GitHub::validate_login(token).await?;
+    let previous_token = secrets::get("github.token")?;
+    secrets::set("github.token", token)?;
+    if let Err(error) = state
+        .store()
+        .and_then(|store| store.save_github_login(&login))
+    {
+        match previous_token {
+            Some(value) => secrets::set("github.token", &value)?,
+            None => secrets::delete("github.token")?,
+        }
+        return Err(error);
+    }
+    drop(guard);
+    state.sync(&app).await
+}
+#[tauri::command]
+pub async fn disconnect_github(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let _guard = state.operation.lock().await;
+    secrets::delete("github.token")?;
+    let mut store = state.store()?;
+    store.clear_github_login()?;
+    store.replace_items("github", &[])?;
+    store.save_status(&SourceStatus {
+        source: "github".into(),
+        ..Default::default()
+    })?;
+    AppState::notify(&app);
+    Ok(())
+}
+#[tauri::command]
+pub fn get_github_login(state: State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
+    state.store()?.github_login()
 }
 #[tauri::command]
 pub fn get_settings(state: State<'_, Arc<AppState>>) -> Result<Settings, String> {

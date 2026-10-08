@@ -12,14 +12,24 @@ export default function Connections({ statuses, onChange }: {
   const [error, setError] = useState('');
   const [notionToken, setNotionToken] = useState('');
   const [notionDatabase, setNotionDatabase] = useState('');
+  const [githubToken, setGithubToken] = useState('');
+  const [githubLogin, setGithubLogin] = useState<string | null>(null);
   const googleSources = ['gmail', 'calendar'].map(source => statuses.find(s => s.source === source));
   const notion = statuses.find(status => status.source === 'notion');
+  const github = statuses.find(status => status.source === 'github');
   const connected = googleSources.some(s => s?.connected);
   const hasError = googleSources.some(s => s?.error);
 
   useEffect(() => {
     void api.hasClient().then(setHasClient).catch(e => setError(String(e)));
   }, []);
+  useEffect(() => {
+    if (github?.connected) {
+      void api.githubLogin().then(setGithubLogin).catch(e => setError(String(e)));
+    } else {
+      setGithubLogin(null);
+    }
+  }, [github?.connected]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -100,7 +110,33 @@ export default function Connections({ statuses, onChange }: {
           <button disabled={busy} onClick={() => void run(api.disconnectNotion)}>연결 해제</button>
         </div>}
       </section>
-      <section className="card"><h2>GitHub</h2><p className="empty">준비 중</p></section>
+      <section className="card connection-card">
+        <h2>GITHUB <span className={`dot ${github?.error ? 'error' : github?.connected ? 'live' : ''}`} /></h2>
+        <p>리뷰 요청 · 내 PR · 할당 이슈 읽기 전용 연결</p>
+        <p className="muted">Fine-grained token이 접근할 수 있는 저장소만 검색됩니다. Metadata, Pull requests, Issues 읽기 권한을 선택하세요.</p>
+        {!github?.connected && <form onSubmit={event => {
+          event.preventDefault();
+          void run(async () => {
+            await api.saveGithub(githubToken);
+            setGithubToken('');
+            setGithubLogin(await api.githubLogin());
+          });
+        }}>
+          <label>개인 액세스 토큰
+            <input type="password" autoComplete="off" value={githubToken}
+              onChange={event => setGithubToken(event.target.value)} required disabled={busy} />
+          </label>
+          <button disabled={busy || !githubToken.trim()}>GitHub 연결</button>
+        </form>}
+        <div className="connection-details">
+          <div>상태 <span>{github?.syncing ? '동기화 중' : github?.connected ? `연결됨 · ${githubLogin ?? '로그인 확인 중'}` : '연결 안 됨'}</span></div>
+          <div>마지막 동기화 <span>{github?.last_synced ? new Date(github.last_synced).toLocaleString('ko-KR') : '아직 없음'}</span></div>
+        </div>
+        {github?.error && <p className="danger">{github.error}</p>}
+        {github?.connected && <div className="actions">
+          <button disabled={busy} onClick={() => void run(async () => { await api.disconnectGithub(); setGithubLogin(null); })}>연결 해제</button>
+        </div>}
+      </section>
     </div>
   </>;
 }

@@ -1,3 +1,4 @@
+pub mod github;
 pub mod gmail;
 pub mod google_calendar;
 pub mod notion;
@@ -25,6 +26,7 @@ pub fn registry(auth: Arc<GoogleAuth>, store: Arc<Mutex<Store>>) -> Registry {
     vec![
         Arc::new(gmail::Gmail::new(auth.clone())),
         Arc::new(google_calendar::GoogleCalendar::new(auth)),
-        Arc::new(notion::Notion::new(store)),
+        Arc::new(notion::Notion::new(store.clone())),
+        Arc::new(github::GitHub::new(store)),
     ]
 }
