@@ -1,12 +1,12 @@
 # m2a-google-calendar
 
-- Status: Approved (chaejinseong, 2026-10-06)
+- Status: Implemented (2026-10-08)
 - Created: 2026-10-06
 - Author: claude
 - Implementer: codex
 - Source PRD: planning/docs/prd/ai-os-dashboard.md (M2, FR8)
 - Depends on: app/docs/specs/261006-1535-01-m1-app-skeleton-gmail.md (Reviewed)
-- Reports: app/docs/reports/<file>.md (filled in by the implementer)
+- Reports: app/docs/reports/261008-1036-01-m2a-google-calendar.md
 
 > Only the human sets `Approved`.
 
@@ -58,11 +58,11 @@ Anything not listed here is off-limits without stopping to ask.
 
 ## Done when
 
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 추가 테스트:
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 추가 테스트:
   `event_to_item` — 종일 일정, cancelled, attendees 없음, 내가 needsAction인 초대;
   `missed` — 지난 초대는 제외, 다가오는 needsAction 포함
-- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
-- [ ] `npm run build` 성공
+- [x] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
+- [x] `npm run build` 성공
 - [ ] 수동 확인: 다른 계정에서 나를 초대한 일정을 만들고 응답하지 않으면 MISSED와
   PIPELINE 요청에 뜬다. 오늘 일정이 SCHEDULE 카드에 시간순으로 뜬다.
 
