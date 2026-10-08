@@ -250,7 +250,9 @@ where
                 eprintln!("AI 판정 작업 중단");
             }
         }
-        debug_assert!(spent + reserved <= settings.ai_monthly_cap_usd);
+        if spent + reserved > settings.ai_monthly_cap_usd {
+            eprintln!("AI 비용 상한 초과: 실제 사용량이 예약 추정치를 넘음");
+        }
     }
     Ok(spent)
 }
@@ -540,5 +542,38 @@ mod tests {
         let stats = store.stats(now.with_timezone(&chrono::Local)).unwrap();
         assert_eq!(stats.month_input_tokens, 100);
         assert_eq!(stats.month_output_tokens, 10);
+    }
+    #[tokio::test]
+    async fn actual_cost_above_reservation_does_not_panic_or_start_next_request() {
+        let mut settings = Settings::default();
+        let items = candidates();
+        let worst = ai::worst_case_cost(
+            &ai::request_body(&settings.ai_model, &items[0]),
+            settings.ai_price_in_per_mtok,
+            settings.ai_price_out_per_mtok,
+        );
+        settings.ai_monthly_cap_usd = worst;
+        let model = settings.clone();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        let spent = run_capped(
+            items,
+            0.0,
+            &settings,
+            move |item| {
+                let counter = counter.clone();
+                let mut result = max_usage(&model, &item);
+                result.output_tokens += 1;
+                async move {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    (item, Ok(result))
+                }
+            },
+            |_, _, _| Ok(()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(spent > settings.ai_monthly_cap_usd);
     }
 }
