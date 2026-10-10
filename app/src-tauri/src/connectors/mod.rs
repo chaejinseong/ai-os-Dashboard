@@ -2,6 +2,7 @@ pub mod github;
 pub mod gmail;
 pub mod google_calendar;
 pub mod notion;
+pub const GOOGLE_SOURCES: [&str; 2] = ["gmail", "calendar"];
 use crate::{model::Item, oauth::GoogleAuth, store::Store};
 use std::sync::{Arc, Mutex};
 #[derive(Debug, thiserror::Error)]
@@ -29,4 +30,21 @@ pub fn registry(auth: Arc<GoogleAuth>, store: Arc<Mutex<Store>>) -> Registry {
         Arc::new(notion::Notion::new(store.clone())),
         Arc::new(github::GitHub::new(store)),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn google_sources_match_connector_ids() {
+        let auth = Arc::new(GoogleAuth::default());
+        assert_eq!(
+            GOOGLE_SOURCES,
+            [
+                gmail::Gmail::new(auth.clone()).id(),
+                google_calendar::GoogleCalendar::new(auth).id(),
+            ]
+        );
+    }
 }

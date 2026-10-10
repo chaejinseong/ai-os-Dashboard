@@ -1,7 +1,6 @@
 use crate::{
     ai,
-    connectors::github::GitHub,
-    connectors::notion::Notion,
+    connectors::{github::GitHub, notion::Notion, GOOGLE_SOURCES},
     missed::{self, Context, MissedItem, Rules},
     model::{Item, ItemKind, Settings, SourceStatus, Stage},
     secrets,
@@ -138,7 +137,7 @@ pub async fn disconnect_google(
     Ok(())
 }
 fn clear_google_cache(store: &mut Store) -> Result<(), String> {
-    for source in ["gmail", "calendar"] {
+    for source in GOOGLE_SOURCES {
         store.replace_items(source, &[])?;
         store.save_status(&SourceStatus {
             source: source.into(),
