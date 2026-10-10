@@ -6,8 +6,8 @@ deleted, or archived.
 
 | File | Status | Summary |
 |---|---|---|
-| 261006-1535-01-google-cloud-setup.md | open | Gmail OAuth 클라이언트 만들기 (사람이 직접) |
-| 261006-1730-01-notion-github-setup.md | open | Notion 통합·GitHub 토큰·Anthropic 키 준비 (사람이 직접) |
+| 261006-1535-01-google-cloud-setup.md | open | Google 연결 남은 수동 확인 3개: 다크 화면 비교·재실행 캐시·연결 해제 (사람) |
+| 261011-0040-01-keychain-prompts.md | blocked | Keychain 확인 창 반복 — A(항목 통합) / B(고정 서명) 사람 결정 대기 |
 
 ## How to add an item
 
