@@ -11,7 +11,7 @@ export default function Connections({ statuses, onChange }: {
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState<Set<Card>>(() => new Set());
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Record<Card, string>>({ google: '', notion: '', github: '' });
   const [notionToken, setNotionToken] = useState('');
   const [notionDatabase, setNotionDatabase] = useState('');
   const [githubToken, setGithubToken] = useState('');
@@ -22,12 +22,16 @@ export default function Connections({ statuses, onChange }: {
   const connected = googleSources.some(s => s?.connected);
   const hasError = googleSources.some(s => s?.error);
 
+  function setCardError(card: Card, message: string) {
+    setErrors(current => ({ ...current, [card]: message }));
+  }
+
   useEffect(() => {
-    void api.hasClient().then(setHasClient).catch(e => setError(String(e)));
+    void api.hasClient().then(setHasClient).catch(e => setCardError('google', String(e)));
   }, []);
   useEffect(() => {
     if (github?.connected) {
-      void api.githubLogin().then(setGithubLogin).catch(e => setError(String(e)));
+      void api.githubLogin().then(setGithubLogin).catch(e => setCardError('github', String(e)));
     } else {
       setGithubLogin(null);
     }
@@ -35,9 +39,9 @@ export default function Connections({ statuses, onChange }: {
 
   async function run(card: Card, action: () => Promise<void>) {
     setBusy(current => new Set(current).add(card));
-    setError('');
+    setCardError(card, '');
     try { await action(); onChange(); }
-    catch (e) { setError(String(e)); }
+    catch (e) { setCardError(card, String(e)); }
     finally {
       setBusy(current => {
         const next = new Set(current);
@@ -49,9 +53,9 @@ export default function Connections({ statuses, onChange }: {
 
   return <>
     <h1>연결</h1>
-    {error && <p className="error-banner" role="alert">{error}</p>}
     <section className="card connection-card">
       <h2>GOOGLE <span className={`dot ${hasError ? 'error' : connected ? 'live' : ''}`} /></h2>
+      {errors.google && <p className="error-banner" role="alert">{errors.google}</p>}
       <p>Gmail · Calendar 읽기 전용 연결</p>
       <p className="muted">Google Cloud의 Desktop app 클라이언트 정보를 입력하세요. Keychain에 저장됩니다.</p>
       {!connected && <form onSubmit={e => {
@@ -90,6 +94,7 @@ export default function Connections({ statuses, onChange }: {
     <div className="card-grid placeholders">
       <section className="card connection-card">
         <h2>NOTION <span className={`dot ${notion?.error ? 'error' : notion?.connected ? 'live' : ''}`} /></h2>
+        {errors.notion && <p className="error-banner" role="alert">{errors.notion}</p>}
         <p>프로젝트 플래너 · 읽기 전용 연결</p>
         {!notion?.connected && <form onSubmit={event => {
           event.preventDefault();
@@ -120,6 +125,7 @@ export default function Connections({ statuses, onChange }: {
       </section>
       <section className="card connection-card">
         <h2>GITHUB <span className={`dot ${github?.error ? 'error' : github?.connected ? 'live' : ''}`} /></h2>
+        {errors.github && <p className="error-banner" role="alert">{errors.github}</p>}
         <p>리뷰 요청 · 내 PR · 할당 이슈 읽기 전용 연결</p>
         <p className="muted">Fine-grained token이 접근할 수 있는 저장소만 검색됩니다. Metadata, Pull requests, Issues 읽기 권한을 선택하세요.</p>
         {!github?.connected && <form onSubmit={event => {
