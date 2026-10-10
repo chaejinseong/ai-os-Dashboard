@@ -15,7 +15,7 @@ Status flow: `Draft` → `Approved` (human only) → `Implemented`
 | 261006-1730-03-m2c-github.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M2c: 리뷰 요청·내 PR·할당 이슈 |
 | 261006-1730-04-m3-ai-judgment.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M3: Claude 메일 판정, 👍/👎, 비용 상한 |
 | 261008-1420-01-m3-strict-cost-cap.md | Reviewed | codex | planning/docs/prd/ai-os-dashboard.md | M3 후속: 요청별 최대 비용 예약으로 월 상한 엄수 |
-| 261008-1520-01-review-suggestions-cleanup.md | Implemented | codex | none — 리뷰 suggestion 정리 | M1~M3 남은 리뷰 제안 12건 fix, 1건 won't fix |
+| 261008-1520-01-review-suggestions-cleanup.md | Reviewed | codex | none — 리뷰 suggestion 정리 | M1~M3 남은 리뷰 제안 12건 fix, 1건 won't fix |
 
 ## How to add a spec
 

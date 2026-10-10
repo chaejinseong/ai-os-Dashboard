@@ -123,7 +123,17 @@ Formatting only: `app/src/components/Sidebar.tsx`, `TitleBar.tsx`, `TopBar.tsx`,
 
 ## Review
 
-- Pending Claude review.
+- Reviewer: claude (Pam), 2026-10-10, round 1. 이 스펙의 작성자이기도 하다.
+- Result: must-fix 0, suggestion 1 → 스펙 `Reviewed`. D2 수동 확인(실제 Notion/GitHub 토큰 필요)은 미실행으로 남는다 — 차단 아님.
+- Re-run: `cargo clippy ... -- -D warnings` 경고 0; `cargo test ... -- --skip oauth::tests::idle` 54 passed (oauth loopback 2개는 샌드박스 바인드 제한, god 호스트 실행 56 passed 근거); `npm run build` 성공; `find src -name '*.tsx' -exec awk 'length>200' {} +` 출력 없음.
+- 보고서 ↔ 코드 일치: f1b34f1·e07d6ed·b939879·b6f2e69·ebaa611·7b6549b가 스펙의 A1~E1과 파일별 Purpose/Method에 맞는다. 스펙 Files 밖 변경 없음, 스키마·`lib.rs`·`model.rs`·`ai.rs` 변경 없음, 새 로그·오류 문구는 모두 고정 문구(키 없음), 테스트는 가짜 judge·메모리 DB·순수 함수만(실제 API 없음).
+  - A1 `collect_threads`: 형식 오류는 건너뛰고 네트워크·HTTP 오류는 전파. A3 events 실패 → PR 생성 시각.
+  - A2 `refresh_error_message`: `ServerResponse`만 재로그인, 나머지는 재시도 문구.
+  - B1 겹침 기준(오늘 0시 < 끝, 시작 < 모레 0시), B2 `since = now` 대체, B3 option id 우선·이름 대체(옛 매핑 호환).
+  - C1 메일 `thread#last_message_id` 키를 `missed`·`apply_ai_stages`·두 화면이 함께 쓴다. C2 고정 오류 문구 저장·표시, 401/403 뒤 새 요청 중지, 키 저장 시 오류 삭제. C3 판정 중복이어도 사용량 기록.
+  - D1 `GOOGLE_SOURCES`와 커넥터 `id()` 일치 테스트. E1 8개 파일은 공백을 뺀 내용이 이전과 같음을 확인(포맷만).
+
+1. `suggestion` — `app/src/pages/Connections.tsx` `busy`: 스펙대로 카드 이름 하나만 담는다. Google 브라우저 로그인(최대 5분) 중에 Notion·GitHub 연결을 누르면 `busy`가 그 카드로 바뀌어 Google 카드의 "처리 중…"과 브라우저 안내가 사라지고 Google 버튼이 다시 눌린다. 누르면 백엔드 `try_lock`이 "다른 연결 또는 동기화 작업이 진행 중입니다"를 돌려줘 데이터 문제는 없다. 카드별로 따로 기억하려면 `Set<'google' | 'notion' | 'github'>`이 맞다 (스펙 작성 시 놓친 부분).
 
 ## Follow-ups
 
