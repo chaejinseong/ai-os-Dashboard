@@ -25,7 +25,10 @@
 
 ## Review
 
-- Pending Claude review.
+- Reviewer: claude (Pam), 2026-10-10, round 1
+- Result: must-fix 0, suggestion 0. 스펙 없음(busy Set 리뷰 suggestion 후속, trivial).
+- Re-run: `npm run build` 성공.
+- 보고서 ↔ 코드 일치: c897919는 공용 `error`를 `Record<Card, string>`으로 바꾸고 `setCardError`가 함수형 업데이트로 해당 카드만 고친다. `run`은 시작 때 자기 카드 오류만 지우고 실패 시 자기 카드에만 쓴다. `hasClient` 오류는 Google 카드, `githubLogin` 오류는 GitHub 카드로 간다. 페이지 상단 배너는 없어지고 세 카드 안에 같은 `error-banner`(role="alert")로 보인다. 남은 `setError`·`error` 참조 없음. 실제 계정 수동 확인은 미실행(보고서 기재대로).
 
 ## Follow-ups
 
