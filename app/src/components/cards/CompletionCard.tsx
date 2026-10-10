@@ -1,4 +1,30 @@
 import type { Summary } from '../../api';
+
 export default function CompletionCard({ data }: {
-    data: Summary['completion'];
-}) { const total = data.done + data.left; const percent = total ? Math.round(data.done / total * 100) : 0; return <section className="card"><h2>COMPLETION</h2><div className="completion"><div className="donut"><svg viewBox="0 0 140 140" aria-label={`완료 ${percent}%`}><defs><linearGradient id="progress"><stop stopColor="#e8a54b"/><stop offset="1" stopColor="#e2735a"/></linearGradient></defs><circle cx="70" cy="70" r="57" fill="none" stroke="var(--surface-2)" strokeWidth="12"/><circle cx="70" cy="70" r="57" fill="none" stroke="url(#progress)" strokeWidth="12" strokeDasharray={`${percent / 100 * 358.14} 358.14`} strokeLinecap="round" transform="rotate(-90 70 70)"/></svg><strong>{total ? `${percent}%` : '—'}</strong></div><div className="completion-stats"><div><span className="dot live"/> DONE <strong>{data.done}</strong></div><div><span className="dot"/> LEFT <strong>{data.left}</strong></div></div></div>{!total && <p className="empty">Notion을 연결하면 표시됩니다</p>}</section>; }
+  data: Summary['completion'];
+}) {
+  const total = data.done + data.left;
+  const percent = total ? Math.round(data.done / total * 100) : 0;
+  return <section className="card">
+    <h2>COMPLETION</h2>
+    <div className="completion">
+      <div className="donut">
+        <svg viewBox="0 0 140 140" aria-label={`완료 ${percent}%`}>
+          <defs><linearGradient id="progress">
+            <stop stopColor="#e8a54b"/><stop offset="1" stopColor="#e2735a"/>
+          </linearGradient></defs>
+          <circle cx="70" cy="70" r="57" fill="none" stroke="var(--surface-2)" strokeWidth="12"/>
+          <circle cx="70" cy="70" r="57" fill="none" stroke="url(#progress)" strokeWidth="12"
+            strokeDasharray={`${percent / 100 * 358.14} 358.14`} strokeLinecap="round"
+            transform="rotate(-90 70 70)"/>
+        </svg>
+        <strong>{total ? `${percent}%` : '—'}</strong>
+      </div>
+      <div className="completion-stats">
+        <div><span className="dot live"/> DONE <strong>{data.done}</strong></div>
+        <div><span className="dot"/> LEFT <strong>{data.left}</strong></div>
+      </div>
+    </div>
+    {!total && <p className="empty">Notion을 연결하면 표시됩니다</p>}
+  </section>;
+}
