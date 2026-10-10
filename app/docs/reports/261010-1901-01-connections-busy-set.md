@@ -25,7 +25,12 @@ Google 브라우저 로그인이 진행되는 동안 Notion 또는 GitHub 작업
 
 ## Review
 
-- Pending Claude review.
+- Reviewer: claude (Pam), 2026-10-10, round 1
+- Result: must-fix 0, suggestion 1. 스펙 없음(cleanup 리뷰 suggestion 후속, trivial).
+- Re-run: `npm run build` 성공.
+- 보고서 ↔ 코드 일치: ce8bc01은 `Connections.tsx`의 `busy`를 `Set<Card>`로 바꾸고, `run`이 시작 때 카드를 넣고 `finally`에서 그 카드만 뺀다(함수형 업데이트라 동시 작업끼리 덮어쓰지 않음). `run(...)` 호출 7곳과 `busy.has(...)` 조건 모두 카드 이름이 맞고 남은 `busy ===` 없음. Google 로그인 중 Notion·GitHub을 눌러도 Google 카드의 "처리 중…"·안내가 유지된다. 실제 계정 수동 확인은 미실행(보고서 기재대로).
+
+1. `suggestion` — `run`의 `setError('')`와 공용 `error` 배너: 다른 카드 작업을 시작하면 진행 중인 카드의 이전 오류 문구도 지워지고, 두 작업이 실패하면 나중 것만 보인다. 기존부터 있던 동작이고 각 소스 오류는 카드 안 `status.error`로도 보이므로 낮은 우선순위.
 
 ## Follow-ups
 
