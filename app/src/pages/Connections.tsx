@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type SourceStatus } from '../api';
 
+type Card = 'google' | 'notion' | 'github';
+
 export default function Connections({ statuses, onChange }: {
   statuses: SourceStatus[];
   onChange: () => void;
@@ -8,7 +10,7 @@ export default function Connections({ statuses, onChange }: {
   const [hasClient, setHasClient] = useState(false);
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
-  const [busy, setBusy] = useState<'google' | 'notion' | 'github' | null>(null);
+  const [busy, setBusy] = useState<Set<Card>>(() => new Set());
   const [error, setError] = useState('');
   const [notionToken, setNotionToken] = useState('');
   const [notionDatabase, setNotionDatabase] = useState('');
@@ -31,12 +33,18 @@ export default function Connections({ statuses, onChange }: {
     }
   }, [github?.connected]);
 
-  async function run(card: 'google' | 'notion' | 'github', action: () => Promise<void>) {
-    setBusy(card);
+  async function run(card: Card, action: () => Promise<void>) {
+    setBusy(current => new Set(current).add(card));
     setError('');
     try { await action(); onChange(); }
     catch (e) { setError(String(e)); }
-    finally { setBusy(current => current === card ? null : current); }
+    finally {
+      setBusy(current => {
+        const next = new Set(current);
+        next.delete(card);
+        return next;
+      });
+    }
   }
 
   return <>
@@ -54,12 +62,12 @@ export default function Connections({ statuses, onChange }: {
         });
       }}>
         <label>클라이언트 ID
-          <input autoComplete="off" value={id} onChange={e => setId(e.target.value)} required disabled={busy === 'google'} />
+          <input autoComplete="off" value={id} onChange={e => setId(e.target.value)} required disabled={busy.has('google')} />
         </label>
         <label>클라이언트 secret
-          <input type="password" autoComplete="off" value={secret} onChange={e => setSecret(e.target.value)} required disabled={busy === 'google'} />
+          <input type="password" autoComplete="off" value={secret} onChange={e => setSecret(e.target.value)} required disabled={busy.has('google')} />
         </label>
-        <button disabled={busy === 'google' || !id.trim() || !secret.trim()}>클라이언트 정보 저장</button>
+        <button disabled={busy.has('google') || !id.trim() || !secret.trim()}>클라이언트 정보 저장</button>
         {hasClient && <small className="muted">저장된 클라이언트 정보가 있습니다</small>}
       </form>}
       {googleSources.map((status, index) => <div className="connection-details" key={index}>
@@ -72,12 +80,12 @@ export default function Connections({ statuses, onChange }: {
         {status?.error && <p className="danger">{status.error}</p>}
       </div>)}
       <div className="actions">
-        <button className="primary" disabled={busy === 'google' || !hasClient} onClick={() => void run('google', api.connect)}>
-          {busy === 'google' ? '처리 중…' : connected ? '다시 로그인' : 'Google 연결'}
+        <button className="primary" disabled={busy.has('google') || !hasClient} onClick={() => void run('google', api.connect)}>
+          {busy.has('google') ? '처리 중…' : connected ? '다시 로그인' : 'Google 연결'}
         </button>
-        {connected && <button disabled={busy === 'google'} onClick={() => void run('google', api.disconnect)}>연결 해제</button>}
+        {connected && <button disabled={busy.has('google')} onClick={() => void run('google', api.disconnect)}>연결 해제</button>}
       </div>
-      {busy === 'google' && <p className="muted">로그인은 브라우저에서 진행하며 최대 5분 기다립니다.</p>}
+      {busy.has('google') && <p className="muted">로그인은 브라우저에서 진행하며 최대 5분 기다립니다.</p>}
     </section>
     <div className="card-grid placeholders">
       <section className="card connection-card">
@@ -93,13 +101,13 @@ export default function Connections({ statuses, onChange }: {
         }}>
           <label>내부 통합 토큰
             <input type="password" autoComplete="off" value={notionToken}
-              onChange={event => setNotionToken(event.target.value)} required disabled={busy === 'notion'} />
+              onChange={event => setNotionToken(event.target.value)} required disabled={busy.has('notion')} />
           </label>
           <label>데이터베이스 URL 또는 ID
             <input autoComplete="off" value={notionDatabase}
-              onChange={event => setNotionDatabase(event.target.value)} required disabled={busy === 'notion'} />
+              onChange={event => setNotionDatabase(event.target.value)} required disabled={busy.has('notion')} />
           </label>
-          <button disabled={busy === 'notion' || !notionToken.trim() || !notionDatabase.trim()}>Notion 연결</button>
+          <button disabled={busy.has('notion') || !notionToken.trim() || !notionDatabase.trim()}>Notion 연결</button>
         </form>}
         <div className="connection-details">
           <div>상태 <span>{notion?.syncing ? '동기화 중' : notion?.connected ? '연결됨' : '연결 안 됨'}</span></div>
@@ -107,7 +115,7 @@ export default function Connections({ statuses, onChange }: {
         </div>
         {notion?.error && <p className="danger">{notion.error}</p>}
         {notion?.connected && <div className="actions">
-          <button disabled={busy === 'notion'} onClick={() => void run('notion', api.disconnectNotion)}>연결 해제</button>
+          <button disabled={busy.has('notion')} onClick={() => void run('notion', api.disconnectNotion)}>연결 해제</button>
         </div>}
       </section>
       <section className="card connection-card">
@@ -124,9 +132,9 @@ export default function Connections({ statuses, onChange }: {
         }}>
           <label>개인 액세스 토큰
             <input type="password" autoComplete="off" value={githubToken}
-              onChange={event => setGithubToken(event.target.value)} required disabled={busy === 'github'} />
+              onChange={event => setGithubToken(event.target.value)} required disabled={busy.has('github')} />
           </label>
-          <button disabled={busy === 'github' || !githubToken.trim()}>GitHub 연결</button>
+          <button disabled={busy.has('github') || !githubToken.trim()}>GitHub 연결</button>
         </form>}
         <div className="connection-details">
           <div>상태 <span>{github?.syncing ? '동기화 중' : github?.connected ? `연결됨 · ${githubLogin ?? '로그인 확인 중'}` : '연결 안 됨'}</span></div>
@@ -134,7 +142,7 @@ export default function Connections({ statuses, onChange }: {
         </div>
         {github?.error && <p className="danger">{github.error}</p>}
         {github?.connected && <div className="actions">
-          <button disabled={busy === 'github'} onClick={() => void run('github', async () => { await api.disconnectGithub(); setGithubLogin(null); })}>연결 해제</button>
+          <button disabled={busy.has('github')} onClick={() => void run('github', async () => { await api.disconnectGithub(); setGithubLogin(null); })}>연결 해제</button>
         </div>}
       </section>
     </div>
