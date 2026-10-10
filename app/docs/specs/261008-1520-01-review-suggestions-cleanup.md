@@ -1,12 +1,12 @@
 # review-suggestions-cleanup
 
-- Status: Approved (chaejinseong, 2026-10-08)
+- Status: Implemented
 - Created: 2026-10-08
 - Author: claude (Pam)
 - Implementer: codex
 - Source PRD: none — 남은 리뷰 suggestion 정리 (사람 요청 "handle the remaining suggestions")
 - Depends on: M1·M2a·M2b·M2c·M3 스펙 (모두 Reviewed)
-- Reports: app/docs/reports/<file>.md (filled in by the implementer)
+- Reports: app/docs/reports/261008-1521-01-review-suggestions-cleanup.md
 
 > Only the human sets `Approved`. Once approved, the implementer builds
 > this without asking for plan approval again — so write it so nobody
@@ -150,7 +150,7 @@ Email이면 `"{id}#{meta.last_message_id}"`, 그 밖은 `id`. `MissedItem`에 �
 
 명령은 `app/`에서 실행한다.
 
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` 통과. 추가 테스트:
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` 통과 (호스트 56 passed; 로컬 샌드박스는 OAuth localhost bind 권한으로 2 failed). 추가 테스트:
   - A1 `gmail::tests`: `collect_threads([Ok(Some), Ok(None), Ok(Some)])` → 2건; `[Ok(Some), Err]` → `Err`
   - A2 `oauth::tests`: `ServerResponse(invalid_grant)` → "다시 로그인 필요"; `RequestTokenError::Other(..)` → 다시 시도 문구
   - A3 `github::tests`: `requested_at_or(None, …, Some(t))` → `t`; 일치 이벤트 있으면 이벤트 시각
@@ -161,9 +161,9 @@ Email이면 `"{id}#{meta.last_message_id}"`, 그 밖은 `id`. `MissedItem`에 �
   - C2 `sync::tests`: 가짜 judge가 첫 건에 `Status(401)` → 두 번째 후보 호출 안 함, 오류 문구 "AI 키 확인 필요 (401)"; `store::tests`: `ai.last_error` 저장·삭제 왕복
   - C3 `store::tests`: 같은 판정을 두 번 기록하면 판정 1건, 사용량·비용은 2건 합
   - D1 `connectors::tests`: `GOOGLE_SOURCES`가 Gmail·Calendar 커넥터의 `id()`와 같음
-- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
-- [ ] `npm run build` 성공
-- [ ] `find src -name '*.tsx' -exec awk 'length>200' {} +` 결과 없음 (E1)
+- [x] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 경고 0
+- [x] `npm run build` 성공
+- [x] `find src -name '*.tsx' -exec awk 'length>200' {} +` 결과 없음 (E1)
 - [ ] D2 수동 확인 (프런트 테스트 도구 없음): Notion 연결 중 Google 카드에 브라우저 로그인 안내가 안 보이고 GitHub 연결 버튼은 눌린다.
 
 ## Open questions
